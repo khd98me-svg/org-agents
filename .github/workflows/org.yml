@@ -1,0 +1,63 @@
+name: org-agents
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # احتياط فقط: لو انقطعت السلسلة يعيدها (concurrency يمنع التداخل)
+  workflow_dispatch:
+concurrency:
+  group: org-agents
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      STATE_PASS: ${{ secrets.STATE_PASS }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+      OWNER_CHAT_ID: ${{ secrets.OWNER_CHAT_ID }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+      BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+      BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
+      BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+      MODELS_JSON: ${{ secrets.MODELS_JSON }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      LLM_DAILY_LIMIT: ${{ secrets.LLM_DAILY_LIMIT }}
+      # الرمز المدمج يحتاج صلاحية contents:write لحفظ فرع state.
+      GITHUB_TOKEN: ${{ github.token }}
+      ORG_SHELL: "1"
+      GH_PAT: ${{ secrets.GH_PAT }}
+      GH_USER: ${{ github.repository_owner }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASS: ${{ secrets.SMTP_PASS }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      TG_CHANNEL: ${{ secrets.TG_CHANNEL }}
+      API_1: ${{ secrets.API_1 }}
+      API_2: ${{ secrets.API_2 }}
+      API_3: ${{ secrets.API_3 }}
+      ORG_DB: ${{ github.workspace }}/organization.db
+      ORG_WORKSPACE: ${{ github.workspace }}/workspace
+      ORG_MODELS: ${{ github.workspace }}/models.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: restore state
+        run: bash cloud/restore.sh
+      - name: run company
+        run: python org_bot.py cloud 270
+      - name: save state
+        if: always()
+        run: bash cloud/save.sh
+      - name: chain next run (تشغيل متواصل عبر GitHub Actions)
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # لو فشلت الدورة ننتظر قليلاً حتى لا ندور بسرعة في حلقة فشل
+          if [ "${{ job.status }}" != "success" ]; then sleep 120; fi
+          sleep 3
+          gh workflow run org.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}" || echo "تعذّر التسلسل، cron الاحتياطي يكمل"
