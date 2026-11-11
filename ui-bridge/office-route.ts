@@ -23,14 +23,18 @@ function isRunning(status: unknown): boolean {
     ['running', 'working', 'in_progress', 'in-progress'].includes(status.toLowerCase());
 }
 
-function makeAgent(agent: Row, runs: Row[], tasks: Row[]) {
-  const ownRuns = runs.filter(run => String(run.agent_id) === String(agent.id));
+function makeAgent(agent: Row, runs: Row[], tasks: Row[], now: number) {
+  const ownRuns = runs
+    .filter(run => String(run.agent_id) === String(agent.id))
+    .sort((a, b) => epoch(b.updated || b.created) - epoch(a.updated || a.created));
   const latest = ownRuns[0];
   const activeRun = ownRuns.find(run => isRunning(run.status));
   const run = activeRun || latest;
   const task = run ? tasks.find(item => String(item.id) === String(run.task_id)) : undefined;
   const lastActivity = epoch(run?.updated || run?.created || agent.created_at);
-  const working = Boolean(activeRun);
+  const activeWindowMs = Number(process.env.OFFICE_ACTIVE_WINDOW_MS || 5 * 60 * 1000);
+  // A stale 'running' row may be an orphan; never display it as live work.
+  const working = Boolean(activeRun && lastActivity > 0 && now - lastActivity <= activeWindowMs);
 
   return {
     id: String(agent.id),
@@ -92,8 +96,9 @@ export async function GET(request: Request) {
     }
 
     const tables = snapshot.data as Record<string, Row[]>;
+    const now = Date.now();
     const agents = (tables.agents || []).map(agent =>
-      makeAgent(agent, tables.runs || [], tables.tasks || []),
+      makeAgent(agent, tables.runs || [], tables.tasks || [], now),
     );
 
     const activityLog = (tables.audit || []).slice(0, 80).map(item => ({
