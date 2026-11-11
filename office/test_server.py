@@ -86,6 +86,24 @@ class OfficeSnapshotTests(unittest.TestCase):
         self.assertNotIn('sessionStorage', html)
         self.assertIn('type="password"', html)
         self.assertIn('Authorization:"Bearer "+officeToken', html)
+    def test_server_reads_validated_snapshot_file(self):
+        import json
+        payload = {
+            'read_only': True, 'agents': [], 'departments': [], 'tasks': [],
+            'approvals': [], 'runs': [], 'counts': {'agents': 0, 'open_tasks': 0}
+        }
+        snapshot_path = Path(self.temp.name) / 'snapshot.json'
+        snapshot_path.write_text(json.dumps(payload), encoding='utf-8')
+        with patch.object(server, 'SNAPSHOT_PATH', snapshot_path):
+            self.assertEqual(server.snapshot(), payload)
+
+    def test_server_rejects_unmarked_snapshot_file(self):
+        import json
+        snapshot_path = Path(self.temp.name) / 'unsafe.json'
+        snapshot_path.write_text(json.dumps({'agents': []}), encoding='utf-8')
+        with patch.object(server, 'SNAPSHOT_PATH', snapshot_path):
+            with self.assertRaisesRegex(RuntimeError, 'غير صالحة'):
+                server.snapshot()
     def test_snapshot_rejects_incomplete_database(self):
         empty_db = Path(self.temp.name) / "empty.db"
         import sqlite3
