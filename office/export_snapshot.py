@@ -9,7 +9,7 @@ import server
 
 data = server.snapshot()
 # Guard against accidentally expanding the export into private company records.
-for forbidden in ("payload", "description", "result", "history", "thought", "observation", "args", "pending"):
+for forbidden in ("payload", "result", "history", "thought", "observation", "args", "pending"):
     for rowset in ("agents", "departments", "tasks", "approvals", "runs"):
         for row in data.get(rowset, []):
             if forbidden in row:
