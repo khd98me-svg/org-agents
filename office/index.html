@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>المكتب الافتراضي | Org Agents</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d2e;--panel2:#172438;--line:#26364d;--text:#edf3fb;--muted:#9aabc0;--blue:#70a9ff;--green:#59d6a0;--amber:#ffc66d;--red:#ff7f86}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% -20%,#1b3556 0,transparent 45%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input{font:inherit}.app{max-width:1440px;margin:auto;padding:22px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}.brand{display:flex;gap:12px;align-items:center}.logo{width:46px;height:46px;border-radius:14px;background:linear-gradient(145deg,#4389ed,#725ee8);display:grid;place-items:center;font-size:24px}.brand h1{font-size:20px;margin:0}.brand p{color:var(--muted);font-size:12px;margin:3px 0 0}.pill{border:1px solid #72572c;background:#302817;color:var(--amber);border-radius:999px;padding:8px 12px;font-size:12px;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}.stat,.panel{background:linear-gradient(160deg,rgba(23,36,56,.96),rgba(16,27,43,.96));border:1px solid var(--line);border-radius:16px}.stat{padding:15px}.stat span{color:var(--muted);font-size:12px}.stat strong{display:block;font-size:27px;margin-top:6px}.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,.85fr);gap:16px}.panel{padding:17px}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}.panel h2{font-size:15px;margin:0}.sub{font-size:11px;color:var(--muted)}.office{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.room{min-height:145px;background:#101b2a;border:1px solid #2a3a50;border-radius:13px;padding:12px;position:relative;overflow:hidden}.room:after{content:"";position:absolute;width:100px;height:100px;border:1px solid #263951;border-radius:50%;left:-28px;bottom:-55px}.room h3{font-size:13px;margin:0 0 5px}.room small{color:var(--muted)}.people{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.person{width:40px;height:40px;border-radius:12px;background:#263b57;display:grid;place-items:center;font-size:21px;border:1px solid #3b5473;cursor:pointer;position:relative}.person:hover{outline:2px solid var(--blue)}.dot{position:absolute;width:9px;height:9px;border-radius:50%;bottom:-2px;right:-2px;border:2px solid #101b2a;background:var(--green)}.dot.busy{background:var(--amber)}.dot.review{background:var(--blue)}.dot.wait{background:var(--red)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:13px;color:var(--muted);font-size:11px}.legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px}
+.side{display:flex;flex-direction:column;gap:16px}.activity{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}.activity:last-child{border:0}.activity b{font-size:12px}.activity p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.6}.bullet{width:8px;height:8px;border-radius:50%;background:var(--blue);margin-top:5px;flex:none}
+.toolbar{display:flex;gap:8px;align-items:center;margin:18px 0 12px;flex-wrap:wrap}.search{flex:1;min-width:160px;background:#101b2a;border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--text)}.tab{border:1px solid var(--line);background:#152238;color:var(--muted);padding:8px 12px;border-radius:9px;cursor:pointer}.tab.active{background:#24436b;color:#fff;border-color:#416da5}.list{display:grid;gap:8px}.rowitem{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 12px;background:#101b2a;border:1px solid #26364d;border-radius:11px}.rowitem strong{font-size:12px}.rowitem small{display:block;color:var(--muted);font-size:11px;margin-top:4px}.status{font-size:10px;padding:5px 8px;border-radius:999px;background:#26364d;color:#b8c9df;white-space:nowrap}.status.work{background:#3a301e;color:var(--amber)}.status.done{background:#173a31;color:var(--green)}.status.waiting{background:#3b242a;color:#ff9da3}
+button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}.modal{position:fixed;inset:0;background:#050a12c9;display:none;place-items:center;padding:18px;z-index:5}.modal.open{display:grid}.dialog{width:min(420px,100%);background:#172438;border:1px solid #3a4c66;border-radius:16px;padding:20px}.dialog-head{display:flex;justify-content:space-between;align-items:center}.close{background:none;border:0;color:var(--muted);font-size:22px;cursor:pointer}.dialog p{color:var(--muted);font-size:13px;line-height:1.8}.notice{margin-top:16px;padding:12px;border:1px solid #72572c;background:#302817;color:#ffdda0;border-radius:11px;font-size:12px;line-height:1.7}
+@media(max-width:850px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.app{padding:13px}.top{align-items:flex-start}.pill{font-size:10px}.office{grid-template-columns:repeat(2,1fr)}.room:last-child{grid-column:span 2}.stat strong{font-size:23px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top"><div class="brand"><div class="logo">🏢</div><div><h1>المكتب الافتراضي</h1><p>Org Agents · مركز قيادة المؤسسة</p></div></div><div class="pill">● نموذج أولي — بيانات تجريبية</div></header>
+<section class="stats">
+<div class="stat"><span>إجمالي الموظفين</span><strong id="countAgents">6</strong></div>
+<div class="stat"><span>مهام قيد التنفيذ</span><strong id="countWork">2</strong></div>
+<div class="stat"><span>بانتظار المراجعة</span><strong id="countReview">1</strong></div>
+<div class="stat"><span>موافقات مطلوبة</span><strong id="countApprovals">1</strong></div>
+</section>
+<div class="layout">
+<main>
+<section class="panel"><div class="panel-head"><h2>🏛️ مساحة العمل</h2><span class="sub">اضغط على شخصية لعرض ملفها</span></div>
+<div class="office" id="office">
+<div class="room"><h3>👑 مكتب الرئيس التنفيذي</h3><small>التوجيه والقرارات</small><div class="people"><button class="person" data-person="1" aria-label="الرئيس التنفيذي">👨🏻‍💼<i class="dot"></i></button></div></div>
+<div class="room"><h3>🔎 البحث والتطوير</h3><small>جمع المعلومات وتحليلها</small><div class="people"><button class="person" data-person="2" aria-label="باحث السوق">🧑🏻‍💻<i class="dot busy"></i></button><button class="person" data-person="3" aria-label="محلل">👩🏻‍💻<i class="dot busy"></i></button></div></div>
+<div class="room"><h3>⚙️ التقنية والأنظمة</h3><small>البناء والصيانة</small><div class="people"><button class="person" data-person="4" aria-label="مهندس الأنظمة">👨🏽‍💻<i class="dot"></i></button></div></div>
+<div class="room"><h3>📋 العمليات والمشاريع</h3><small>التخطيط والتنفيذ</small><div class="people"><button class="person" data-person="5" aria-label="مدير العمليات">🧑🏽‍💼<i class="dot wait"></i></button></div></div>
+<div class="room"><h3>🛡️ الجودة والتدقيق</h3><small>فحص النتائج</small><div class="people"><button class="person" data-person="6" aria-label="مراجع الجودة">👩🏽‍🔬<i class="dot review"></i></button></div></div>
+<div class="room"><h3>💬 قاعة الاجتماعات</h3><small>لا يوجد اجتماع الآن</small><div class="people"><span class="sub">المكان جاهز للاجتماعات</span></div></div>
+</div>
+<div class="legend"><span><i style="background:var(--green)"></i>متاح</span><span><i style="background:var(--amber)"></i>يعمل</span><span><i style="background:var(--blue)"></i>يراجع</span><span><i style="background:var(--red)"></i>ينتظر</span></div>
+</section>
+<div class="toolbar"><button class="tab active" data-view="tasks">المهام</button><button class="tab" data-view="staff">الموظفون</button><input id="search" class="search" placeholder="ابحث في القائمة..." aria-label="بحث"></div>
+<section class="panel"><div class="panel-head"><h2 id="listTitle">📌 لوحة المهام</h2><span class="sub">بيانات العرض التجريبي</span></div><div class="list" id="list"></div></section>
+</main>
+<aside class="side">
+<section class="panel"><div class="panel-head"><h2>🔔 آخر النشاطات</h2><span class="sub">تجريبي</span></div>
+<div class="activity"><i class="bullet"></i><div><b>باحث السوق</b><p>يعمل على جمع معلومات السوق.</p></div></div>
+<div class="activity"><i class="bullet"></i><div><b>مراجع الجودة</b><p>ينتظر نتيجة مهمة لمراجعتها.</p></div></div>
+<div class="activity"><i class="bullet"></i><div><b>مدير العمليات</b><p>طلب موافقة على توزيع مهمة.</p></div></div>
+</section>
+<section class="panel"><div class="panel-head"><h2>⏳ الموافقات</h2><span class="status waiting">1 معلّقة</span></div><div class="activity"><div><b>توزيع مهمة بحثية</b><p>تحتاج موافقة الرئيس قبل التنفيذ.</p></div></div><div class="notice">هذه النسخة واجهة أولية فقط. لم تتصل بعد بقاعدة بيانات المؤسسة أو بمحرك الوكلاء، ولا تنفّذ موافقات أو تغييرات حقيقية.</div></section>
+</aside>
+</div>
+</div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="personName"><div class="dialog"><div class="dialog-head"><h2 id="personName">ملف الموظف</h2><button class="close" id="close" aria-label="إغلاق">×</button></div><p id="personInfo"></p><div class="notice">المحادثة المباشرة وربط حالة الموظف بالنظام سيضافان بعد تجهيز واجهة API الآمنة.</div></div></div>
+<script>
+const staff=[
+{id:1,name:"الرئيس التنفيذي",role:"CEO",dept:"الإدارة العليا",state:"متاح",desc:"تحديد الأولويات وتوزيع المهام ومراجعة القرارات."},
+{id:2,name:"باحث السوق",role:"باحث",dept:"البحث والتطوير",state:"يعمل",desc:"جمع معلومات السوق وإعداد ملخصات موثقة."},
+{id:3,name:"محلل الأعمال",role:"محلل",dept:"البحث والتطوير",state:"يعمل",desc:"تحليل البيانات وصياغة التوصيات."},
+{id:4,name:"مهندس الأنظمة",role:"مهندس",dept:"التقنية والأنظمة",state:"متاح",desc:"تطوير الأنظمة وصيانة الأدوات."},
+{id:5,name:"مدير العمليات",role:"مدير",dept:"العمليات والمشاريع",state:"ينتظر موافقة",desc:"تنسيق التنفيذ ومتابعة سير المهام."},
+{id:6,name:"مراجع الجودة",role:"مراجع",dept:"الجودة والتدقيق",state:"يراجع",desc:"فحص المخرجات واكتشاف الأخطاء."}
+];
+const tasks=[
+{title:"دراسة فرص السوق",owner:"باحث السوق",state:"قيد التنفيذ",kind:"work"},
+{title:"تحليل النتائج الأولية",owner:"محلل الأعمال",state:"قيد التنفيذ",kind:"work"},
+{title:"مراجعة تقرير البحث",owner:"مراجع الجودة",state:"بانتظار المراجعة",kind:"waiting"},
+{title:"اعتماد توزيع المهمة",owner:"الرئيس التنفيذي",state:"بانتظار الموافقة",kind:"waiting"}
+];
+let view="tasks";
+const list=document.getElementById("list"),search=document.getElementById("search");
+function render(){const q=search.value.trim().toLowerCase();document.getElementById("listTitle").textContent=view==="tasks"?"📌 لوحة المهام":"👥 فريق المؤسسة";const data=view==="tasks"?tasks:staff;list.innerHTML="";data.filter(x=>(x.title||x.name).toLowerCase().includes(q)||(x.owner||x.dept||"").toLowerCase().includes(q)).forEach(x=>{const el=document.createElement("div");el.className="rowitem";const left=document.createElement("div"),strong=document.createElement("strong"),small=document.createElement("small"),badge=document.createElement("span");strong.textContent=view==="tasks"?x.title:x.name;small.textContent=view==="tasks"?"المسؤول: "+x.owner:x.role+" · "+x.dept;badge.className="status "+(x.kind||"");badge.textContent=view==="tasks"?x.state:x.state;left.append(strong,small);el.append(left,badge);if(view==="staff"){el.style.cursor="pointer";el.addEventListener("click",()=>showPerson(x.id));}list.append(el);});}
+function showPerson(id){const p=staff.find(x=>x.id===id);if(!p)return;document.getElementById("personName").textContent=p.name;document.getElementById("personInfo").textContent=p.role+" · "+p.dept+" · الحالة: "+p.state+" — "+p.desc;document.getElementById("modal").classList.add("open");}
+document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>{view=b.dataset.view;document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("active",x===b));render();}));
+document.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",()=>showPerson(Number(b.dataset.person))));
+search.addEventListener("input",render);document.getElementById("close").addEventListener("click",()=>document.getElementById("modal").classList.remove("open"));document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")e.currentTarget.classList.remove("open")});
+render();
+</script>
+</body></html>
