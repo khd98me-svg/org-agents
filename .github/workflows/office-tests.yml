@@ -1,0 +1,27 @@
+name: Virtual office isolated tests
+
+on:
+  push:
+    branches:
+      - virtual-office-foundation
+    paths:
+      - "office/**"
+      - ".github/workflows/office-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  office-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run isolated office API tests
+        run: python -m unittest discover -s office -p 'test_*.py' -v
