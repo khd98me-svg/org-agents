@@ -34,7 +34,7 @@ jobs:
           test "${#OFFICE_SYNC_PASS}" -ge 32 || { echo "::error::OFFICE_SYNC_PASS must be at least 32 characters"; exit 1; }
       - name: Restore encrypted company state
         run: bash cloud/restore.sh
-      - name: Export limited snapshot and encrypt it
+      - name: Export limited snapshot, encrypt, and authenticate
         shell: bash
         run: |
           set -euo pipefail
@@ -43,9 +43,17 @@ jobs:
           python office/export_snapshot.py > /tmp/office-export/snapshot.json
           openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:OFFICE_SYNC_PASS \
             -in /tmp/office-export/snapshot.json -out /tmp/office-export/snapshot.enc
+          python - "$OFFICE_SYNC_PASS" /tmp/office-export/snapshot.enc /tmp/office-export/snapshot.hmac <<'PY'
+          import hashlib, hmac, pathlib, sys
+          password, source, target = sys.argv[1:]
+          key = hashlib.pbkdf2_hmac("sha256", password.encode(), b"org-office-sync-integrity-v1", 200000)
+          digest = hmac.new(key, pathlib.Path(source).read_bytes(), hashlib.sha256).hexdigest()
+          pathlib.Path(target).write_text(digest + "\\n", encoding="ascii")
+          PY
           rm -f /tmp/office-export/snapshot.json
           test -s /tmp/office-export/snapshot.enc
-      - name: Publish ciphertext only to office-sync branch
+          test -s /tmp/office-export/snapshot.hmac
+      - name: Publish ciphertext and authentication tag only
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,12 +62,13 @@ jobs:
           rm -rf /tmp/office-publish
           mkdir -p /tmp/office-publish
           cp /tmp/office-export/snapshot.enc /tmp/office-publish/snapshot.enc
+          cp /tmp/office-export/snapshot.hmac /tmp/office-publish/snapshot.hmac
           cd /tmp/office-publish
           git init -q
           git checkout -q -b office-sync
           git config user.name "org-office-sync"
           git config user.email "org-office-sync@users.noreply.github.com"
-          git add snapshot.enc
-          git commit -q -m "encrypted office snapshot"
+          git add snapshot.enc snapshot.hmac
+          git commit -q -m "authenticated encrypted office snapshot"
           git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:office-sync
-          echo "Encrypted snapshot published. No plaintext snapshot or database was uploaded."
+          echo "Authenticated ciphertext published. No plaintext snapshot or database was uploaded."
