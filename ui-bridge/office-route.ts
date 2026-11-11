@@ -28,8 +28,8 @@ function makeAgent(agent: Row, runs: Row[], tasks: Row[], now: number) {
     .filter(run => String(run.agent_id) === String(agent.id))
     .sort((a, b) => epoch(b.updated || b.created) - epoch(a.updated || a.created));
   const latest = ownRuns[0];
-  const activeRun = ownRuns.find(run => isRunning(run.status));
-  const run = activeRun || latest;
+  const activeRun = latest && isRunning(latest.status) ? latest : undefined;
+  const run = latest;
   const task = run ? tasks.find(item => String(item.id) === String(run.task_id)) : undefined;
   const lastActivity = epoch(run?.updated || run?.created || agent.created_at);
   const activeWindowMs = Number(process.env.OFFICE_ACTIVE_WINDOW_MS || 5 * 60 * 1000);
