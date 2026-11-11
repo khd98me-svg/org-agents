@@ -46,6 +46,48 @@ def rows(con, sql, args=()):
     return [dict(r) for r in con.execute(sql, args).fetchall()]
 
 
+def sanitize_snapshot(data):
+    """Return only explicitly approved dashboard fields; never trust snapshot JSON."""
+    fields = {
+        "agents": ("id", "name", "role", "specialty", "manager_id", "status", "department_id", "department"),
+        "departments": ("id", "name", "description", "parent_department_id", "manager_agent_id", "manager_name", "status"),
+        "tasks": ("id", "title", "status", "assigned_to", "assignee", "department_id", "department",
+                  "parent_id", "priority", "created_at", "updated_at", "status_label"),
+        "approvals": ("id", "kind", "status", "ts"),
+        "runs": ("id", "task_id", "agent_id", "status", "steps", "created", "updated", "task_title",
+                 "agent_name", "status_label"),
+    }
+    if not isinstance(data, dict) or data.get("read_only") is not True:
+        raise RuntimeError("لقطة المكتب غير صالحة أو ليست للقراءة فقط")
+    clean = {"source": "private_snapshot", "read_only": True}
+    for key, allowed in fields.items():
+        values = data.get(key)
+        if not isinstance(values, list):
+            raise RuntimeError("لقطة المكتب ناقصة أو غير صالحة: " + key)
+        if len(values) > (100 if key in ("agents", "departments") else 100):
+            raise RuntimeError("لقطة المكتب تتجاوز الحد المسموح: " + key)
+        clean[key] = []
+        for item in values:
+            if not isinstance(item, dict):
+                raise RuntimeError("عنصر غير صالح في لقطة المكتب: " + key)
+            row = {}
+            for name in allowed:
+                value = item.get(name)
+                if value is None or isinstance(value, (str, int, float, bool)):
+                    if isinstance(value, str):
+                        value = value[:2000]
+                    row[name] = value
+            clean[key].append(row)
+    counts = data.get("counts")
+    count_keys = ("agents", "active_agents", "open_tasks", "pending_approvals", "active_runs")
+    if not isinstance(counts, dict) or any(
+        not isinstance(counts.get(k), int) or counts[k] < 0 for k in count_keys
+    ):
+        raise RuntimeError("عدادات لقطة المكتب غير صالحة")
+    clean["counts"] = {k: counts[k] for k in count_keys}
+    return clean
+
+
 def snapshot():
     if SNAPSHOT_PATH is not None:
         try:
@@ -54,10 +96,7 @@ def snapshot():
             raise RuntimeError("تعذر قراءة لقطة المكتب المحلية") from exc
         if not isinstance(data, dict) or data.get("read_only") is not True:
             raise RuntimeError("لقطة المكتب غير صالحة أو ليست للقراءة فقط")
-        for key in ("agents", "departments", "tasks", "approvals", "runs", "counts"):
-            if key not in data:
-                raise RuntimeError("لقطة المكتب ناقصة: " + key)
-        return data
+        return sanitize_snapshot(data)
     with closing(db_read()) as con:
         tables = {r["name"] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         required = {"agents", "departments", "tasks", "approvals", "runs"}
