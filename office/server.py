@@ -18,7 +18,7 @@ from urllib.parse import quote, urlparse
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("OFFICE_DB", os.environ.get("ORG_DB", ROOT.parent / "organization.db"))).expanduser()
 TOKEN = os.environ.get("OFFICE_TOKEN", "")
-HOST = os.environ.get("OFFICE_HOST", "127.0.0.1")
+HOST = "127.0.0.1"  # Loopback only; do not expose the API to the network by default
 PORT = int(os.environ.get("OFFICE_PORT", "8765"))
 
 STATUS_AR = {
@@ -167,8 +167,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if not TOKEN:
-        raise SystemExit("اضبط OFFICE_TOKEN أولاً؛ لن يبدأ الخادم دون رمز وصول.")
+    if len(TOKEN) < 32:
+        raise SystemExit("اضبط OFFICE_TOKEN عشوائيًا بطول 32 حرفًا على الأقل؛ لن يبدأ الخادم بدونه.")
     if not DB_PATH.is_file():
         raise SystemExit("قاعدة البيانات غير موجودة: " + str(DB_PATH))
     print("Office API read-only: http://%s:%d" % (HOST, PORT))
