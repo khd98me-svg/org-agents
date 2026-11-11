@@ -17,6 +17,7 @@ from urllib.parse import quote, urlparse
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("OFFICE_DB", os.environ.get("ORG_DB", ROOT.parent / "organization.db"))).expanduser()
+SNAPSHOT_PATH = Path(os.environ["OFFICE_SNAPSHOT"]).expanduser() if os.environ.get("OFFICE_SNAPSHOT") else None
 TOKEN = os.environ.get("OFFICE_TOKEN", "")
 HOST = "127.0.0.1"  # Loopback only; do not expose the API to the network by default
 PORT = int(os.environ.get("OFFICE_PORT", "8765"))
@@ -46,6 +47,17 @@ def rows(con, sql, args=()):
 
 
 def snapshot():
+    if SNAPSHOT_PATH is not None:
+        try:
+            data = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("تعذر قراءة لقطة المكتب المحلية") from exc
+        if not isinstance(data, dict) or data.get("read_only") is not True:
+            raise RuntimeError("لقطة المكتب غير صالحة أو ليست للقراءة فقط")
+        for key in ("agents", "departments", "tasks", "approvals", "runs", "counts"):
+            if key not in data:
+                raise RuntimeError("لقطة المكتب ناقصة: " + key)
+        return data
     with closing(db_read()) as con:
         tables = {r["name"] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         required = {"agents", "departments", "tasks", "approvals", "runs"}
@@ -169,8 +181,10 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if len(TOKEN) < 32:
         raise SystemExit("اضبط OFFICE_TOKEN عشوائيًا بطول 32 حرفًا على الأقل؛ لن يبدأ الخادم بدونه.")
-    if not DB_PATH.is_file():
+    if SNAPSHOT_PATH is None and not DB_PATH.is_file():
         raise SystemExit("قاعدة البيانات غير موجودة: " + str(DB_PATH))
+    if SNAPSHOT_PATH is not None and not SNAPSHOT_PATH.is_file():
+        raise SystemExit("لقطة المكتب غير موجودة: " + str(SNAPSHOT_PATH))
     print("Office API read-only: http://%s:%d" % (HOST, PORT))
     print("Database: " + str(DB_PATH))
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
