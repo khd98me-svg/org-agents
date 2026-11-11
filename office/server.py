@@ -72,8 +72,12 @@ def sanitize_snapshot(data):
                 raise RuntimeError("عنصر غير صالح في لقطة المكتب: " + key)
             row = {}
             for name in allowed:
-                value = item.get(name)
-                if value is None or isinstance(value, (str, int, float, bool)):
+                if name not in item:
+                    continue
+                value = item[name]
+                if value is None:
+                    continue
+                if isinstance(value, (str, int, float, bool)):
                     if isinstance(value, str):
                         value = value[:2000]
                     row[name] = value
