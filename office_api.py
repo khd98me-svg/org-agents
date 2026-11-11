@@ -33,7 +33,7 @@ TABLES = {
     "agent_departments": "SELECT id,agent_id,department_id,role,status,assigned_at FROM agent_departments ORDER BY id",
     "reporting_lines": "SELECT id,manager_agent_id,subordinate_agent_id,department_id,relation,created_at FROM reporting_lines ORDER BY id",
     "tasks": "SELECT id,title,description,assigned_to,status,created_at,department_id,parent_id,result,score,priority,updated_at,dept_hint FROM tasks ORDER BY id DESC LIMIT ?",
-    "runs": "SELECT id,task_id,agent_id,status,steps,pending,created,updated FROM runs ORDER BY id DESC LIMIT ?",
+    "runs": "SELECT id,task_id,agent_id,status,history,steps,pending,created,updated FROM runs ORDER BY id DESC LIMIT ?",
     "approvals": "SELECT id,ts,kind,payload,status,decided_at,note FROM approvals ORDER BY id DESC LIMIT ?",
     "messages": "SELECT id,ts,sender,recipient,task_id,kind,body,is_read FROM messages ORDER BY id DESC LIMIT ?",
     "memories": "SELECT id,ts,scope,agent_id,topic,text,weight FROM memories ORDER BY id DESC LIMIT ?",
@@ -41,6 +41,12 @@ TABLES = {
     "reviews": "SELECT id,ts,task_id,reviewer,verdict,score,notes FROM reviews ORDER BY id DESC LIMIT ?",
     "steps": "SELECT id,ts,task_id,agent_id,n,thought,action,args,observation FROM steps ORDER BY id DESC LIMIT ?",
     "audit": "SELECT id,actor,action,details,created_at FROM audit ORDER BY id DESC LIMIT ?",
+    "ceo_chat": "SELECT id,ts,role,content FROM ceo_chat ORDER BY id DESC LIMIT ?",
+    "ceo_feedback": "SELECT id,ts,source,item,feedback,outcome FROM ceo_feedback ORDER BY id DESC LIMIT ?",
+    "ceo_notes": "SELECT id,ts,category,priority,source,status,title,details,recommendation,related_department,related_task_id FROM ceo_notes ORDER BY id DESC LIMIT ?",
+    "schedules": "SELECT id,goal,every_s,last_run,active,created FROM schedules ORDER BY id DESC LIMIT ?",
+    "usage": "SELECT day,calls FROM usage ORDER BY day DESC LIMIT ?",
+    "watches": "SELECT id,url,mode,keyword,every_s,last_check,last_hash,last_state,last_text,active,created FROM watches ORDER BY id DESC LIMIT ?",
 }
 
 
@@ -77,6 +83,12 @@ def rows(conn, table, limit):
                 item["payload"] = json.loads(item.get("payload") or "{}")
             except (TypeError, ValueError):
                 item["payload"] = {"raw": item.get("payload")}
+        if table == "runs":
+            for key in ("history", "steps", "pending"):
+                try:
+                    item[key] = json.loads(item.get(key) or "[]")
+                except (TypeError, ValueError):
+                    pass
         if table == "steps":
             for key in ("args",):
                 try:
