@@ -10,9 +10,10 @@ trap 'rm -rf "$TMP"' EXIT
 BASE="https://raw.githubusercontent.com/khd98me-svg/org-agents/office-sync"
 curl --fail --silent --show-error --location "$BASE/snapshot.enc" -o "$TMP/snapshot.enc"
 curl --fail --silent --show-error --location "$BASE/snapshot.hmac" -o "$TMP/snapshot.hmac"
-python - "$OFFICE_SYNC_PASS" "$TMP/snapshot.enc" "$TMP/snapshot.hmac" <<'PY'
-import hashlib, hmac, pathlib, sys
-password, encrypted, signature = sys.argv[1:]
+python - "$TMP/snapshot.enc" "$TMP/snapshot.hmac" <<'PY'
+import hashlib, hmac, os, pathlib, sys
+encrypted, signature = sys.argv[1:]
+password = os.environ["OFFICE_SYNC_PASS"]
 key = hashlib.pbkdf2_hmac("sha256", password.encode(), b"org-office-sync-integrity-v1", 200000)
 expected = pathlib.Path(signature).read_text(encoding="ascii").strip()
 actual = hmac.new(key, pathlib.Path(encrypted).read_bytes(), hashlib.sha256).hexdigest()
