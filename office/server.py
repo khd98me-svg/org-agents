@@ -10,6 +10,7 @@ import hmac
 import json
 import os
 import sqlite3
+from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -45,7 +46,7 @@ def rows(con, sql, args=()):
 
 
 def snapshot():
-    with db_read() as con:
+    with closing(db_read()) as con:
         tables = {r["name"] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         required = {"agents", "departments", "tasks", "approvals", "runs"}
         missing = sorted(required - tables)
