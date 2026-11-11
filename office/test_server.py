@@ -1,4 +1,7 @@
 import sys
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -66,6 +69,23 @@ class OfficeSnapshotTests(unittest.TestCase):
             check = self.org.q("SELECT name FROM agents WHERE id=?", (self.agent_id,))
         self.assertEqual(check[0][0], "موظف اختبار")
 
+    def test_embedded_javascript_syntax(self):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('Node.js is unavailable on this runner')
+        html = (ROOT / 'office' / 'index.html').read_text(encoding='utf-8')
+        scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, flags=re.S | re.I)
+        self.assertTrue(scripts, 'No JavaScript blocks found in office UI')
+        for script in scripts:
+            result = subprocess.run([node, '--check', '-'], input=script, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_ui_does_not_persist_access_token(self):
+        html = (ROOT / 'office' / 'index.html').read_text(encoding='utf-8')
+        self.assertNotIn('localStorage', html)
+        self.assertNotIn('sessionStorage', html)
+        self.assertIn('type="password"', html)
+        self.assertIn('Authorization:"Bearer "+officeToken', html)
     def test_snapshot_rejects_incomplete_database(self):
         empty_db = Path(self.temp.name) / "empty.db"
         import sqlite3
