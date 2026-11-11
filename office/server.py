@@ -198,7 +198,8 @@ class Handler(BaseHTTPRequestHandler):
                     data = snapshot()
                     self.send_bytes(200, json.dumps(data, ensure_ascii=False), "application/json; charset=utf-8")
                 except Exception as exc:
-                    self.send_bytes(503, json.dumps({"error": str(exc)}, ensure_ascii=False), "application/json; charset=utf-8")
+                    print("[office-api] snapshot request failed: %r" % (exc,))
+                    self.send_bytes(503, json.dumps({"error": "تعذر تحميل بيانات المكتب؛ راجع سجل الخادم المحلي."}, ensure_ascii=False), "application/json; charset=utf-8")
                 return
             self.send_bytes(404, '{"error":"not_found"}', "application/json; charset=utf-8")
             return
