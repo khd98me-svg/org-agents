@@ -90,12 +90,40 @@ class OfficeSnapshotTests(unittest.TestCase):
         import json
         payload = {
             'read_only': True, 'agents': [], 'departments': [], 'tasks': [],
-            'approvals': [], 'runs': [], 'counts': {'agents': 0, 'open_tasks': 0}
+            'approvals': [], 'runs': [], 'counts': {'agents': 0, 'active_agents': 0, 'open_tasks': 0,
+            'pending_approvals': 0, 'active_runs': 0}
         }
         snapshot_path = Path(self.temp.name) / 'snapshot.json'
         snapshot_path.write_text(json.dumps(payload), encoding='utf-8')
         with patch.object(server, 'SNAPSHOT_PATH', snapshot_path):
-            self.assertEqual(server.snapshot(), payload)
+            result = server.snapshot()
+        self.assertEqual(result['counts']['agents'], 0)
+        self.assertEqual(result['source'], 'private_snapshot')
+
+    def test_snapshot_file_drops_unapproved_private_fields(self):
+        import json
+        payload = {
+            'read_only': True,
+            'agents': [{'id': 1, 'name': 'موظف', 'private_note': 'DO_NOT_LEAK'}],
+            'departments': [], 'tasks': [],
+            'approvals': [{'id': 2, 'kind': 'approval', 'status': 'pending',
+                           'ts': '2026-11-11', 'payload': 'SECRET_PAYLOAD'}],
+            'runs': [],
+            'counts': {'agents': 1, 'active_agents': 1, 'open_tasks': 0,
+                       'pending_approvals': 1, 'active_runs': 0},
+            'extra': 'PRIVATE_DATA'
+        }
+        snapshot_path = Path(self.temp.name) / 'private.json'
+        snapshot_path.write_text(json.dumps(payload), encoding='utf-8')
+        with patch.object(server, 'SNAPSHOT_PATH', snapshot_path):
+            result = server.snapshot()
+        self.assertEqual(result['agents'], [{'id': 1, 'name': 'موظف'}])
+        self.assertEqual(result['approvals'], [
+            {'id': 2, 'kind': 'approval', 'status': 'pending', 'ts': '2026-11-11'}
+        ])
+        self.assertNotIn('PRIVATE_DATA', repr(result))
+        self.assertNotIn('SECRET_PAYLOAD', repr(result))
+        self.assertNotIn('DO_NOT_LEAK', repr(result))
 
     def test_server_rejects_unmarked_snapshot_file(self):
         import json
