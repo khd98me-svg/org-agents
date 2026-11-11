@@ -21,6 +21,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-o
 <body>
 <div class="app">
 <header class="top"><div class="brand"><div class="logo">🏢</div><div><h1>المكتب الافتراضي</h1><p>Org Agents · مركز قيادة المؤسسة</p></div></div><div class="pill">● نموذج أولي — بيانات تجريبية</div></header>
+
+<div class="connection" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px;padding:12px 14px;background:#121d2e;border:1px solid #26364d;border-radius:13px">
+ <div style="flex:1;min-width:180px"><b style="font-size:12px">اتصال بيانات المؤسسة</b><div id="connectionState" style="font-size:11px;color:#9aabc0;margin-top:4px">وضع العرض التجريبي — لم يتم الاتصال بقاعدة الشركة</div></div>
+ <input id="officeToken" type="password" autocomplete="off" placeholder="رمز الوصول المحلي" aria-label="رمز الوصول المحلي" style="min-width:150px;flex:1;background:#0b1220;border:1px solid #26364d;border-radius:9px;padding:9px;color:#edf3fb">
+ <button id="connectOffice" class="tab active">اتصال</button><button id="disconnectOffice" class="tab">فصل</button>
+</div>
 <section class="stats">
 <div class="stat"><span>إجمالي الموظفين</span><strong id="countAgents">6</strong></div>
 <div class="stat"><span>مهام قيد التنفيذ</span><strong id="countWork">2</strong></div>
@@ -55,7 +61,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-o
 </div>
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="personName"><div class="dialog"><div class="dialog-head"><h2 id="personName">ملف الموظف</h2><button class="close" id="close" aria-label="إغلاق">×</button></div><p id="personInfo"></p><div class="notice">المحادثة المباشرة وربط حالة الموظف بالنظام سيضافان بعد تجهيز واجهة API الآمنة.</div></div></div>
 <script>
-const staff=[
+let staff=[
 {id:1,name:"الرئيس التنفيذي",role:"CEO",dept:"الإدارة العليا",state:"متاح",desc:"تحديد الأولويات وتوزيع المهام ومراجعة القرارات."},
 {id:2,name:"باحث السوق",role:"باحث",dept:"البحث والتطوير",state:"يعمل",desc:"جمع معلومات السوق وإعداد ملخصات موثقة."},
 {id:3,name:"محلل الأعمال",role:"محلل",dept:"البحث والتطوير",state:"يعمل",desc:"تحليل البيانات وصياغة التوصيات."},
@@ -63,7 +69,7 @@ const staff=[
 {id:5,name:"مدير العمليات",role:"مدير",dept:"العمليات والمشاريع",state:"ينتظر موافقة",desc:"تنسيق التنفيذ ومتابعة سير المهام."},
 {id:6,name:"مراجع الجودة",role:"مراجع",dept:"الجودة والتدقيق",state:"يراجع",desc:"فحص المخرجات واكتشاف الأخطاء."}
 ];
-const tasks=[
+let tasks=[
 {title:"دراسة فرص السوق",owner:"باحث السوق",state:"قيد التنفيذ",kind:"work"},
 {title:"تحليل النتائج الأولية",owner:"محلل الأعمال",state:"قيد التنفيذ",kind:"work"},
 {title:"مراجعة تقرير البحث",owner:"مراجع الجودة",state:"بانتظار المراجعة",kind:"waiting"},
@@ -77,5 +83,105 @@ document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",(
 document.querySelectorAll("[data-person]").forEach(b=>b.addEventListener("click",()=>showPerson(Number(b.dataset.person))));
 search.addEventListener("input",render);document.getElementById("close").addEventListener("click",()=>document.getElementById("modal").classList.remove("open"));document.getElementById("modal").addEventListener("click",e=>{if(e.target.id==="modal")e.currentTarget.classList.remove("open")});
 render();
+</script>
+
+<script>
+(() => {
+ const demoStaff = staff.map(x => ({...x}));
+ const demoTasks = tasks.map(x => ({...x}));
+ let officeToken = "";
+ let pollHandle = null;
+ const stateEl = document.getElementById("connectionState");
+ const tokenEl = document.getElementById("officeToken");
+ const connectBtn = document.getElementById("connectOffice");
+ const disconnectBtn = document.getElementById("disconnectOffice");
+ const safeText = v => v == null ? "" : String(v);
+ function statusClass(s) {
+   if (["يعمل","قيد التنفيذ","running","waiting_team"].includes(s)) return "busy";
+   if (["يراجع","بانتظار المراجعة","submitted"].includes(s)) return "review";
+   if (["ينتظر موافقتك","ينتظر ردّك","بانتظار الموافقة","blocked","waiting_approval","waiting_owner"].includes(s)) return "wait";
+   return "";
+ }
+ function addText(parent, tag, value, className) {
+   const el=document.createElement(tag); el.textContent=safeText(value);
+   if(className) el.className=className; parent.appendChild(el); return el;
+ }
+ function renderRealOffice(data) {
+   const runByAgent = new Map();
+   (data.runs || []).forEach(r => { if(r.agent_id != null && !runByAgent.has(r.agent_id)) runByAgent.set(r.agent_id,r); });
+   staff = (data.agents || []).map(a => {
+     const run=runByAgent.get(a.id);
+     const state=run ? (run.status_label || run.status) : (a.status==="active" ? "متاح" : safeText(a.status));
+     return {id:a.id,name:a.name,role:a.role,dept:a.department || "دون إدارة",department_id:a.department_id,state,
+       desc:"الدور: "+safeText(a.role)+" — التخصص: "+safeText(a.specialty)};
+   });
+   tasks = (data.tasks || []).map(t => ({
+     title:t.title,owner:t.assignee || "غير مسندة",state:t.status_label || t.status,
+     kind:["done","rejected"].includes(t.status)?"done":(t.status==="submitted"?"waiting":(["assigned","pending"].includes(t.status)?"work":"waiting"))
+   }));
+   document.getElementById("countAgents").textContent=safeText(data.counts?.agents ?? staff.length);
+   document.getElementById("countWork").textContent=safeText(data.counts?.active_runs ?? 0);
+   document.getElementById("countReview").textContent=safeText((data.tasks||[]).filter(t=>t.status==="submitted").length);
+   document.getElementById("countApprovals").textContent=safeText(data.counts?.pending_approvals ?? 0);
+   const office=document.getElementById("office"); office.replaceChildren();
+   const departments=(data.departments||[]).map(d=>({id:d.id,name:d.name,description:d.description,agents:staff.filter(a=>a.department_id===d.id)}));
+   const withoutDept=staff.filter(a=>!a.department_id);
+   if(withoutDept.length) departments.push({id:"none",name:"دون إدارة",description:"موظفون غير مرتبطين بقسم",agents:withoutDept});
+   if(!departments.length) departments.push({id:"general",name:"المؤسسة",description:"لا توجد إدارات مسجلة",agents:staff});
+   departments.forEach(d=>{
+     const room=document.createElement("div"); room.className="room";
+     addText(room,"h3","🏢 "+d.name); addText(room,"small",d.description||"إدارة المؤسسة");
+     const people=document.createElement("div"); people.className="people";
+     d.agents.forEach(p=>{
+       const btn=document.createElement("button"); btn.className="person"; btn.type="button"; btn.setAttribute("aria-label",p.name);
+       btn.textContent="👤"; const dot=document.createElement("i"); dot.className="dot "+statusClass(p.state); btn.appendChild(dot);
+       btn.addEventListener("click",()=>showPerson(p.id)); people.appendChild(btn);
+     });
+     if(!d.agents.length) addText(people,"span","لا يوجد موظفون مسجلون","sub");
+     room.appendChild(people); office.appendChild(room);
+   });
+   document.querySelectorAll(".panel-head .sub").forEach(el=>{if(el.textContent.includes("تجريبي"))el.textContent="بيانات مباشرة من قاعدة المؤسسة";});
+   render();
+   const approvalPanel=document.querySelector(".side .panel:nth-child(2)");
+   if(approvalPanel){
+     const head=approvalPanel.querySelector(".panel-head");
+     if(head){const badge=head.querySelector(".status");if(badge)badge.textContent=(data.approvals||[]).length+" معلّقة";}
+     const old=approvalPanel.querySelector(".activity"); if(old) old.remove();
+     const notice=approvalPanel.querySelector(".notice"); if(notice) notice.textContent="قراءة فقط: لا يمكن اعتماد الموافقات أو تغييرها من هذه النسخة.";
+     const anchor=notice||approvalPanel;
+     (data.approvals||[]).slice(0,5).forEach(a=>{
+       const item=document.createElement("div"); item.className="activity";
+       const info=document.createElement("div"); addText(info,"b","طلب "+safeText(a.kind)); addText(info,"p","الحالة: "+safeText(a.status));
+       item.appendChild(info); approvalPanel.insertBefore(item,anchor);
+     });
+   }
+ }
+ function setState(text,ok=false){stateEl.textContent=text;stateEl.style.color=ok?"#59d6a0":"#ffc66d";}
+ async function loadSnapshot(showErrors=true) {
+   const response=await fetch("/api/snapshot",{method:"GET",headers:{Authorization:"Bearer "+officeToken},cache:"no-store"});
+   if(!response.ok) throw new Error(response.status===401?"رمز الوصول غير صحيح أو غير موجود":"تعذر الاتصال بالخادم ("+response.status+")");
+   const data=await response.json();
+   if(data.read_only!==true) throw new Error("رفضت الواجهة مصدرًا لا يعلن وضع القراءة فقط");
+   renderRealOffice(data);
+   setState("متصل بقاعدة المؤسسة — قراءة فقط — آخر تحديث: "+new Date().toLocaleTimeString("ar-SA"),true);
+ }
+ connectBtn.addEventListener("click",async()=>{
+   officeToken=tokenEl.value.trim();
+   if(!officeToken){setState("أدخل رمز الوصول الذي أنشأته محليًا.");return;}
+   try {
+     await loadSnapshot();
+     if(pollHandle)clearInterval(pollHandle);
+     pollHandle=setInterval(async()=>{try{await loadSnapshot(false);}catch(e){setState("انقطع الاتصال؛ آخر بيانات معروضة قديمة. "+e.message);}},30000);
+   } catch(e){officeToken="";setState(e.message);}
+ });
+ disconnectBtn.addEventListener("click",()=>{
+   officeToken="";tokenEl.value="";if(pollHandle)clearInterval(pollHandle);pollHandle=null;
+   staff=demoStaff.map(x=>({...x}));tasks=demoTasks.map(x=>({...x}));
+   document.getElementById("countAgents").textContent="6";document.getElementById("countWork").textContent="2";
+   document.getElementById("countReview").textContent="1";document.getElementById("countApprovals").textContent="1";
+   setState("وضع العرض التجريبي — لم يتم الاتصال بقاعدة الشركة");
+   location.reload();
+ });
+})();
 </script>
 </body></html>
