@@ -1,0 +1,32 @@
+name: Office UI bridge tests
+
+on:
+  push:
+    branches:
+      - office-ui-bridge
+    paths:
+      - "office_api.py"
+      - "test_office_api.py"
+      - "ui-bridge/**"
+      - ".github/workflows/office-ui-bridge-tests.yml"
+  pull_request:
+    branches:
+      - office-ui-bridge
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python bridge
+        run: python -m py_compile office_api.py test_office_api.py
+      - name: Run read-only API regression tests
+        run: python -m unittest -v test_office_api
