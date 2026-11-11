@@ -66,10 +66,20 @@ jobs:
           cp /tmp/office-export/snapshot.hmac /tmp/office-publish/snapshot.hmac
           cd /tmp/office-publish
           git init -q
-          git checkout -q -b office-sync
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin office-sync >/dev/null 2>&1; then
+            git fetch -q origin office-sync
+            git checkout -q -b office-sync FETCH_HEAD
+          else
+            git checkout -q --orphan office-sync
+          fi
           git config user.name "org-office-sync"
           git config user.email "org-office-sync@users.noreply.github.com"
           git add snapshot.enc snapshot.hmac
-          git commit -q -m "authenticated encrypted office snapshot"
-          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:office-sync
+          if git diff --cached --quiet; then
+            echo "Encrypted snapshot is unchanged; no commit is needed."
+          else
+            git commit -q -m "authenticated encrypted office snapshot"
+            git push -q origin HEAD:office-sync
+          fi
           echo "Authenticated ciphertext published. No plaintext snapshot or database was uploaded."
