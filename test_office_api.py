@@ -19,6 +19,10 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
                 manager_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO agents VALUES (1, 'CEO', 'chief', 'management', NULL, 'active', 'now');
+            CREATE TABLE approvals (id INTEGER, ts TEXT, kind TEXT, payload TEXT,
+                status TEXT DEFAULT 'pending', decided_at TEXT, note TEXT);
+            INSERT INTO approvals VALUES (1, '2026-11-12T00:00:00', 'create_agent',
+                '{"name":"Test Agent","specialty":"QA"}', 'pending', NULL, NULL);
             CREATE TABLE runs (id INTEGER, task_id INTEGER, agent_id INTEGER, status TEXT,
                 history TEXT, steps TEXT, pending TEXT, created TEXT, updated TEXT);
             INSERT INTO runs VALUES (1, 7, 1, 'done', '[{"event":"finished"}]', '[]', '{}', 'a', 'b');
@@ -60,6 +64,8 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertEqual(result["data"]["runs"][0]["history"], [{"event": "finished"}])
         for table in ("ceo_chat", "ceo_feedback", "ceo_notes", "schedules", "usage", "watches"):
             self.assertEqual(len(result["data"][table]), 1, table)
+        self.assertEqual(result["data"]["approvals"][0]["status"], "pending")
+        self.assertEqual(result["data"]["approvals"][0]["payload"]["name"], "Test Agent")
 
     def test_database_connection_is_read_only(self):
         with office_api.connect_readonly() as conn:
