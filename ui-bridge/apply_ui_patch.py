@@ -72,8 +72,9 @@ READ_ONLY_WRAPPED_END = """              )}
 
 ORG_PAGE = UI_ROOT / "app" / "organization" / "page.tsx"
 TASK_PAGE = UI_ROOT / "app" / "tasks" / "page.tsx"
+TASK_PAGE_SOURCE_PATH = REPO_ROOT / "ui-bridge" / "tasks-page.tsx"
 ORG_PAGE_SOURCE = (REPO_ROOT / "ui-bridge" / "organization-page.tsx").read_text(encoding="utf-8")
-TASK_PAGE_SOURCE = (REPO_ROOT / "ui-bridge" / "tasks-page.tsx").read_text(encoding="utf-8")
+TASK_PAGE_SOURCE = TASK_PAGE_SOURCE_PATH.read_text(encoding="utf-8")
 def configure_env():
     text = ENV_FILE.read_text(encoding="utf-8") if ENV_FILE.exists() else ""
     lines = text.splitlines()
@@ -106,7 +107,7 @@ def configure_env():
 
 
 def main():
-    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, MANAGE_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE, TASK_PAGE_SOURCE)):
+    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, MANAGE_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE, TASK_PAGE_SOURCE_PATH)):
         raise SystemExit("Required file missing. Expected ~/openclawfice and both bridge route sources.")
     page_text = PAGE.read_text(encoding="utf-8")
 
