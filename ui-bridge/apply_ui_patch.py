@@ -10,8 +10,10 @@ UI_ROOT = Path.home() / "openclawfice"
 PAGE = UI_ROOT / "app" / "page.tsx"
 ROUTE = UI_ROOT / "app" / "api" / "office" / "route.ts"
 ACTIONS_ROUTE = UI_ROOT / "app" / "api" / "office" / "actions" / "route.ts"
+INSTRUMENTATION = UI_ROOT / "instrumentation.ts"
 ROUTE_SOURCE = REPO_ROOT / "ui-bridge" / "office-route.ts"
 ACTIONS_SOURCE = REPO_ROOT / "ui-bridge" / "actions-route.ts"
+INSTRUMENTATION_SOURCE = REPO_ROOT / "ui-bridge" / "instrumentation-safe.ts"
 ENV_FILE = UI_ROOT / ".env.local"
 
 OLD = """              needs: defaults.needs,
@@ -90,7 +92,7 @@ def configure_env():
 
 
 def main():
-    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE)):
+    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION)):
         raise SystemExit("Required file missing. Expected ~/openclawfice and both bridge route sources.")
     page_text = PAGE.read_text(encoding="utf-8")
 
@@ -135,6 +137,7 @@ def main():
         (PAGE, "page.tsx"),
         (ROUTE, "office-route.ts"),
         (ACTIONS_ROUTE, "actions-route.ts"),
+        (INSTRUMENTATION, "instrumentation.ts"),
         (ENV_FILE, ".env.local"),
     ):
         if path.exists():
@@ -148,6 +151,7 @@ def main():
     for target, source, label in (
         (ROUTE, ROUTE_SOURCE, "office-route.ts"),
         (ACTIONS_ROUTE, ACTIONS_SOURCE, "actions-route.ts"),
+        (INSTRUMENTATION, INSTRUMENTATION_SOURCE, "instrumentation.ts"),
     ):
         temp = target.with_name(target.name + ".office-ui-bridge.tmp")
         shutil.copy2(source, temp)
@@ -157,7 +161,8 @@ def main():
     print("Installed the read-only organization adapter and Quest Log approvals feed.")
     print(f"Backup: {backup_dir}")
     print("Quest Log displays only approvals whose database status is pending.")
-    print("Approval decisions remain disabled; no database, agent runtime, or engine files were changed.")
+    print("Approval decisions remain disabled; no database or engine files were changed.")
+    print("Legacy OpenClaw autowork and watercooler background tickers are disabled.")
     print("The local bridge secret remains in .env.local and was not displayed.")
 
 
