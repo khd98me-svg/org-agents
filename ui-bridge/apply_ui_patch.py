@@ -71,7 +71,9 @@ READ_ONLY_WRAPPED_END = """              )}
 
 
 ORG_PAGE = UI_ROOT / "app" / "organization" / "page.tsx"
+TASK_PAGE = UI_ROOT / "app" / "tasks" / "page.tsx"
 ORG_PAGE_SOURCE = (REPO_ROOT / "ui-bridge" / "organization-page.tsx").read_text(encoding="utf-8")
+TASK_PAGE_SOURCE = (REPO_ROOT / "ui-bridge" / "tasks-page.tsx").read_text(encoding="utf-8")
 def configure_env():
     text = ENV_FILE.read_text(encoding="utf-8") if ENV_FILE.exists() else ""
     lines = text.splitlines()
@@ -104,7 +106,7 @@ def configure_env():
 
 
 def main():
-    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, MANAGE_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE)):
+    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, MANAGE_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE, TASK_PAGE_SOURCE)):
         raise SystemExit("Required file missing. Expected ~/openclawfice and both bridge route sources.")
     page_text = PAGE.read_text(encoding="utf-8")
 
@@ -151,6 +153,7 @@ def main():
         (ACTIONS_ROUTE, "actions-route.ts"),
         (MANAGE_ROUTE, "manage-route.ts"),
         (ORG_PAGE, "organization-page.tsx"),
+        (TASK_PAGE, "tasks-page.tsx"),
         (INSTRUMENTATION, "instrumentation.ts"),
         (LEGACY_CONFIG, "legacy-config-route.ts"),
         (LEGACY_MEETING, "legacy-meeting-route.ts"),
@@ -186,15 +189,21 @@ def main():
     org_temp.write_text(ORG_PAGE_SOURCE, encoding="utf-8")
     org_temp.replace(ORG_PAGE)
 
+    TASK_PAGE.parent.mkdir(parents=True, exist_ok=True)
+    task_temp = TASK_PAGE.with_name("page.tsx.office-ui-bridge.tmp")
+    task_temp.write_text(TASK_PAGE_SOURCE, encoding="utf-8")
+    task_temp.replace(TASK_PAGE)
+
     configure_env()
     print("Installed the read-only organization adapter, Quest Log feed and organization dashboard.")
     print(f"Backup: {backup_dir}")
     print("Quest Log displays only approvals whose database status is pending.")
     print("Approval decisions and agent execution remain disabled.")
-    print("Owner-confirmed profile edits are limited to agent name/specialty and department name/description; each edit is audited.")
+    print("Owner-confirmed agent/department profile and hierarchy edits, plus task creation/assignment, are audited.")
     print("Legacy OpenClaw autowork and watercooler background tickers are disabled.")
     print("Legacy config, meeting, autowork, and chat write endpoints return HTTP 405.")
     print("Organization dashboard: http://localhost:3333/organization")
+    print("Task management: http://localhost:3333/tasks (creation and assignment only; execution disabled)")
     print("The local bridge secret remains in .env.local and was not displayed.")
 
 
