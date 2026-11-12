@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only local API bridge for the virtual office UI.
+"""Restricted local API bridge for the virtual office UI.
 
-This service exposes the existing organization.db without importing orgx.Org,
-running migrations, starting agents, or writing to the database.
+Reads organization.db without importing orgx.Org or running migrations. The only
+write path edits approved profile text fields and records an audit entry.
 
 Run:
   OFFICE_API_TOKEN='a-long-random-secret' python office_api.py
@@ -17,6 +17,7 @@ import json
 import os
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote, urlparse, parse_qs
 
@@ -162,7 +163,7 @@ def update_profile(payload):
         raise ValueError("no_changes")
 
     table = "agents" if operation == "agent_profile" else "departments"
-    with connect_writable() as conn:
+    with closing(connect_writable()) as conn:
         conn.execute("BEGIN IMMEDIATE")
         exists = conn.execute("SELECT 1 FROM " + table + " WHERE id=?", (entity_id,)).fetchone()
         if not exists:
