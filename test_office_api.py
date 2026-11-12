@@ -17,7 +17,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.db_path = Path(handle.name)
         conn = sqlite3.connect(self.db_path)
         conn.executescript("""
-            CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
+            CREATE TABLE audit (id INTEGER PRIMARY KEY, actor TEXT, action TEXT, details TEXT, created_at TEXT);\n            CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
                 manager_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO agents VALUES (1, 'CEO', 'chief', 'management', NULL, 'active', 'now');
             CREATE TABLE departments (id INTEGER, name TEXT, description TEXT, parent_department_id INTEGER,
@@ -114,6 +114,39 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("ملف للعرض فقط", dashboard)
         self.assertNotIn("/api/office/agents", dashboard)
         self.assertNotIn("method: 'POST'", route)
+
+
+    def test_owner_confirmed_profile_updates_are_allowlisted_and_audited(self):
+        result = office_api.update_profile({
+            "operation": "agent_profile", "id": 1,
+            "name": "Updated CEO", "specialty": "Updated specialty",
+        })
+        self.assertEqual(result["updated_fields"], ["name", "specialty"])
+        with office_api.connect_readonly() as conn:
+            row = conn.execute("SELECT name,specialty,role,status FROM agents WHERE id=1").fetchone()
+            self.assertEqual(tuple(row), ("Updated CEO", "Updated specialty", "chief", "active"))
+            audit = conn.execute("SELECT actor,action,details FROM audit").fetchone()
+            self.assertEqual(audit["actor"], "owner")
+            self.assertEqual(audit["action"], "agent_profile_updated")
+            self.assertIn("name,specialty", audit["details"])
+
+    def test_department_profile_update_and_duplicate_name_rejection(self):
+        result = office_api.update_profile({
+            "operation": "department_profile", "id": 1,
+            "name": "New Strategy", "description": "Updated description",
+        })
+        self.assertEqual(result["operation"], "department_profile")
+        with office_api.connect_readonly() as conn:
+            row = conn.execute("SELECT name,description,manager_agent_id FROM departments WHERE id=1").fetchone()
+            self.assertEqual(tuple(row), ("New Strategy", "Updated description", 1))
+        with self.assertRaises(ValueError):
+            office_api.update_profile({"operation": "department_profile", "id": 1, "manager_agent_id": 99})
+
+    def test_profile_updates_reject_unknown_fields_and_missing_entities(self):
+        with self.assertRaises(ValueError):
+            office_api.update_profile({"operation": "agent_profile", "id": 1, "role": "CEO"})
+        with self.assertRaises(LookupError):
+            office_api.update_profile({"operation": "agent_profile", "id": 999, "name": "Missing"})
 
     def test_database_connection_is_read_only(self):
         with office_api.connect_readonly() as conn:
