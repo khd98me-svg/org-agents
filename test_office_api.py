@@ -18,6 +18,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         conn = sqlite3.connect(self.db_path)
         conn.executescript("""
             CREATE TABLE audit (id INTEGER PRIMARY KEY, actor TEXT, action TEXT, details TEXT, created_at TEXT);\n            CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
+            CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
                 manager_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO agents VALUES (1, 'CEO', 'chief', 'management', NULL, 'active', 'now');
             CREATE TABLE departments (id INTEGER, name TEXT, description TEXT, parent_department_id INTEGER,
@@ -97,7 +98,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("relatedRuns", source)
         self.assertIn("relatedReviews", source)
         self.assertNotIn("/api/office/actions", source)
-        self.assertIn("جميع البيانات للعرض فقط", source)
+        self.assertIn("التعديل محصور في الأسماء والأوصاف", source)
 
     def test_agent_profiles_are_read_only_and_linked_to_org_records(self):
         root = Path(__file__).parent
@@ -111,9 +112,17 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("const agentKey = /^agent(\\d+)$/i.exec(reviewer)", route)
         self.assertIn("(agentKey !== null && agentKey[1] === id)", route)
         self.assertIn("['agents', 'الوكلاء', agents.length]", dashboard)
-        self.assertIn("ملف للعرض فقط", dashboard)
+        self.assertIn("تعديل بيانات الوكيل", dashboard)
+        self.assertIn("تعديل الإدارة", dashboard)
+        self.assertIn("confirm: true", dashboard)
+        self.assertIn("/api/office/manage", dashboard)
         self.assertNotIn("/api/office/agents", dashboard)
         self.assertNotIn("method: 'POST'", route)
+        manage = (root / "ui-bridge" / "manage-route.ts").read_text(encoding="utf-8")
+        self.assertIn("same_origin_required", manage)
+        self.assertIn("explicit_confirmation_required", manage)
+        installer = (root / "ui-bridge" / "apply_ui_patch.py").read_text(encoding="utf-8")
+        self.assertIn("MANAGE_ROUTE", installer)
 
 
     def test_owner_confirmed_profile_updates_are_allowlisted_and_audited(self):
