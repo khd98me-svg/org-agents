@@ -287,7 +287,7 @@ export async function GET(request: Request) {
       chatLog,
       setupCheck: {
         status: 'ok',
-        message: 'Connected to the existing organization engine (limited profile management)',
+        message: 'Connected to the existing organization engine (limited owner management: profiles, hierarchy, task creation and assignment)',
       },
       organization: {
         mode: 'limited_management',
