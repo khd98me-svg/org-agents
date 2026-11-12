@@ -39,6 +39,8 @@ export default function OrganizationDashboard() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [agentQuery, setAgentQuery] = useState('');
+  const [departmentQuery, setDepartmentQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [editor, setEditor] = useState<{ kind: 'agent' | 'department'; id: string; title: string; originalName: string; originalDetail: string } | null>(null);
   const [editName, setEditName] = useState('');
@@ -163,6 +165,20 @@ export default function OrganizationDashboard() {
   };
   const departments = data?.departments || [];
   const agents = data?.agents || [];
+  const filteredDepartments = useMemo(() => {
+    const q = departmentQuery.trim().toLocaleLowerCase();
+    return departments.filter(dept => !q || [
+      dept.id, dept.name, dept.description, dept.manager?.name, dept.parent?.name,
+      ...(dept.members || []).flatMap((member: Item) => [member.name, member.role]),
+    ].some(value => String(value || '').toLocaleLowerCase().includes(q)));
+  }, [departments, departmentQuery]);
+  const filteredAgents = useMemo(() => {
+    const q = agentQuery.trim().toLocaleLowerCase();
+    return agents.filter(agent => !q || [
+      agent.id, agent.name, agent.role, agent.managerRecord?.name,
+      ...(agent.departments || []).flatMap((dept: Item) => [dept.name, dept.role]),
+    ].some(value => String(value || '').toLocaleLowerCase().includes(q)));
+  }, [agents, agentQuery]);
   const selectedAgent = agents.find(agent => String(agent.id) === selectedAgentId) || null;
   const tabs = [
     ['departments', 'الإدارات', departments.length],
@@ -235,14 +251,17 @@ export default function OrganizationDashboard() {
         </nav>
 
         {tab === 'departments' && <>
-          <div style={{ ...muted, marginBottom: 10 }}>اختر إدارة لعرض مهامها مباشرة. لا يؤدي الاختيار إلى تعديل بيانات المؤسسة.</div>
+          <div style={{ ...muted, marginBottom: 10 }}>ابحث باسم الإدارة أو وصفها أو مديرها أو أحد أعضائها. بيانات الهيكل التنظيمي معروضة كما هي مسجلة في قاعدة المؤسسة.</div>
+          <input aria-label="البحث في الإدارات" value={departmentQuery} onChange={e => setDepartmentQuery(e.target.value)}
+            placeholder="ابحث عن إدارة أو مدير أو عضو…" style={{ ...field, marginBottom: 10 }} />
           <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(245px,1fr))', gap: 10 }}>
-            {departments.map(dept =>
+            {filteredDepartments.map(dept =>
               <article key={dept.id} style={panel}>
                 <h2 style={{ margin: '0 0 7px', fontSize: 17 }}>{dept.name}</h2>
                 <p style={{ ...muted, lineHeight: 1.7 }}>{dept.description || 'لا يوجد وصف'}</p>
                 <div style={{ fontSize: 13, margin: '10px 0' }}>المدير: {dept.manager?.name || 'غير محدد'}</div>
-                <div style={muted}>الأعضاء: {dept.members?.length || 0} · المهام: {dept.taskCount || 0}</div>
+                <div style={{ ...muted, marginBottom: 6 }}>الإدارة الأعلى: {dept.parent?.name || 'لا توجد / غير مسجلة'}</div>
+                <div style={muted}>الحالة المسجلة: {dept.status || 'غير محددة'} · الأعضاء: {dept.members?.length || 0} · المهام: {dept.taskCount || 0}</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
                   {(dept.members || []).map((m: Item) =>
                     <span key={m.id} style={{ background: '#222d3d', padding: '5px 8px', borderRadius: 6, fontSize: 12 }}>{m.name} · {m.role}</span>
@@ -260,22 +279,25 @@ export default function OrganizationDashboard() {
                 </div>
               </article>
             )}
-            {!departments.length && <div style={panel}>لا توجد إدارات في البيانات المسترجعة.</div>}
+            {!filteredDepartments.length && <div style={panel}>{departments.length ? 'لا توجد إدارات تطابق البحث.' : 'لا توجد إدارات في البيانات المسترجعة.'}</div>}
           </section>
         </>}
 
         {tab === 'agents' && <>
-          <div style={{ ...muted, marginBottom: 10 }}>اختر وكيلاً لعرض ملفه التنظيمي وسجل عمله. هذه البيانات مسترجعة من قاعدة المؤسسة ولا تتضمن أي أوامر تشغيل أو تعديل.</div>
+          <div style={{ ...muted, marginBottom: 10 }}>ابحث باسم الوكيل أو تخصصه أو إدارته أو مديره. الأدوار الظاهرة هي أدوار عضوية مسجلة وليست قائمة صلاحيات تقنية.</div>
+          <input aria-label="البحث في الوكلاء" value={agentQuery} onChange={e => setAgentQuery(e.target.value)}
+            placeholder="ابحث عن وكيل أو تخصص أو إدارة أو مدير…" style={{ ...field, marginBottom: 10 }} />
           <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 9 }}>
-            {agents.map(agent => <button key={agent.id} onClick={() => setSelectedAgentId(String(agent.id))}
+            {filteredAgents.map(agent => <button key={agent.id} onClick={() => setSelectedAgentId(String(agent.id))}
               aria-pressed={selectedAgentId === String(agent.id)}
               style={{ ...panel, textAlign: 'right', color: '#edf2fa', cursor: 'pointer', borderColor: selectedAgentId === String(agent.id) ? '#7799ce' : '#30394b' }}>
               <strong>{agent.emoji || '🤖'} {agent.name}</strong>
               <div style={{ ...muted, marginTop: 6 }}>{agent.role || 'دون تخصص مسجل'} · {agent.status === 'working' ? 'نشاط حديث مسجل' : 'لا يوجد نشاط حديث مثبت'}</div>
-              <div style={{ ...muted, marginTop: 5 }}>المهام: {agent.tasks?.length || 0} · التشغيلات: {agent.runs?.length || 0} · الإدارات: {agent.departments?.length || 0}</div>
+              <div style={{ ...muted, marginTop: 5 }}>المدير: {agent.managerRecord?.name || 'غير محدد'} · الإدارات: {agent.departments?.length || 0}</div>
+              <div style={{ ...muted, marginTop: 5 }}>المهام: {agent.tasks?.length || 0} · التشغيلات: {agent.runs?.length || 0}</div>
             </button>)}
           </section>
-          {!agents.length && <div style={panel}>لا يوجد وكلاء في البيانات المسترجعة.</div>}
+          {!filteredAgents.length && <div style={panel}>{agents.length ? 'لا يوجد وكلاء يطابقون البحث.' : 'لا يوجد وكلاء في البيانات المسترجعة.'}</div>}
           {selectedAgent && <section style={{ ...panel, marginTop: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
               <div><h2 style={{ margin: 0, fontSize: 20 }}>{selectedAgent.name}</h2><div style={muted}>{selectedAgent.role} · المعرّف #{selectedAgent.id}</div></div>
@@ -291,10 +313,12 @@ export default function OrganizationDashboard() {
               )}
             </div>
             <div style={{ marginTop: 14 }}><strong>الانتماء الإداري</strong>
-              <p style={muted}>{selectedAgent.departments?.length ? selectedAgent.departments.map((d: Item) => d.name + ' · ' + d.role).join('، ') : 'لا يوجد ارتباط إداري نشط مسجل'}</p>
+              <p style={muted}>{selectedAgent.departments?.length ? selectedAgent.departments.map((d: Item) => d.name + ' · دور العضوية: ' + d.role).join('، ') : 'لا يوجد ارتباط إداري نشط مسجل'}</p>
+              <p style={muted}>الأدوار هنا تصف العضوية داخل الإدارة؛ قاعدة البيانات الحالية لا تعرض مصفوفة صلاحيات تقنية مستقلة.</p>
             </div>
             <div style={{ marginTop: 14 }}><strong>التسلسل الإداري</strong>
-              <p style={muted}>يرفع تقاريره إلى: {selectedAgent.reportsTo?.length ? selectedAgent.reportsTo.map((x: Item) => x.managerName).join('، ') : 'غير محدد'}</p>
+              <p style={muted}>المدير المسجل في ملف الوكيل: {selectedAgent.managerRecord?.name || 'غير محدد'}</p>
+              <p style={muted}>خطوط التقارير: {selectedAgent.reportsTo?.length ? selectedAgent.reportsTo.map((x: Item) => x.managerName).join('، ') : 'لا توجد خطوط تقارير مسجلة'}</p>
               <p style={muted}>يتبعه: {selectedAgent.directReports?.length ? selectedAgent.directReports.map((x: Item) => x.agentName).join('، ') : 'لا توجد تقارير مباشرة مسجلة'}</p>
             </div>
             <div style={{ marginTop: 14 }}><strong>المهام المسندة</strong>
