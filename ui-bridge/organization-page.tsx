@@ -40,7 +40,7 @@ export default function OrganizationDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [selectedAgentId, setSelectedAgentId] = useState('');
-  const [editor, setEditor] = useState<{ kind: 'agent' | 'department'; id: string; title: string } | null>(null);
+  const [editor, setEditor] = useState<{ kind: 'agent' | 'department'; id: string; title: string; originalName: string; originalDetail: string } | null>(null);
   const [editName, setEditName] = useState('');
   const [editDetail, setEditDetail] = useState('');
   const [confirmSave, setConfirmSave] = useState(false);
@@ -52,7 +52,7 @@ export default function OrganizationDashboard() {
     try {
       const res = await authFetch('/api/office', { cache: 'no-store' });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
+      if (!res.ok) throw new Error(body.error === 'department_name_exists' ? 'اسم الإدارة مستخدم بالفعل.' : body.error === 'unsupported_fields' ? 'تحتوي البيانات على حقل غير مسموح.' : (body.error || ('HTTP ' + res.status)));
       setData(body); setError('');
     } catch (e: any) {
       setError(e?.message || 'تعذر تحميل بيانات المؤسسة');
@@ -62,9 +62,11 @@ export default function OrganizationDashboard() {
   }, [authFetch]);
 
   const openEditor = (kind: 'agent' | 'department', item: Item) => {
-    setEditor({ kind, id: String(item.id), title: String(item.name || '') });
-    setEditName(String(item.name || ''));
-    setEditDetail(kind === 'agent' ? String(item.role || '') : String(item.description || ''));
+    const originalName = String(item.name || '');
+    const originalDetail = kind === 'agent' ? String(item.role || '') : String(item.description || '');
+    setEditor({ kind, id: String(item.id), title: originalName, originalName, originalDetail });
+    setEditName(originalName);
+    setEditDetail(originalDetail);
     setConfirmSave(false);
     setSaveError('');
     setSaveNotice('');
@@ -78,10 +80,17 @@ export default function OrganizationDashboard() {
       const payload: Item = {
         operation: editor.kind === 'agent' ? 'agent_profile' : 'department_profile',
         id: Number(editor.id),
-        name: editName,
         confirm: true,
       };
-      payload[editor.kind === 'agent' ? 'specialty' : 'description'] = editDetail;
+      if (editName.trim() !== editor.originalName) payload.name = editName.trim();
+      if (editDetail.trim() !== editor.originalDetail) {
+        payload[editor.kind === 'agent' ? 'specialty' : 'description'] = editDetail.trim();
+      }
+      if (!('name' in payload) && !(editor.kind === 'agent' ? 'specialty' in payload : 'description' in payload)) {
+        setSaveError('لم تغيّر أي حقل.');
+        setSaving(false);
+        return;
+      }
       const res = await authFetch('/api/office/manage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -383,7 +392,8 @@ export default function OrganizationDashboard() {
             </label>
             {saveError && <div role="alert" style={{ color: '#ffb9b9', marginTop: 10, fontSize: 13 }}>{saveError}</div>}
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button disabled={!confirmSave || saving || !editName.trim() || !editDetail.trim()}
+              <button disabled={!confirmSave || saving || !editName.trim() || !editDetail.trim() ||
+                (editName.trim() === editor.originalName && editDetail.trim() === editor.originalDetail)}
                 onClick={saveProfile}
                 style={{ flex: 1, background: confirmSave ? '#285b43' : '#26313f', color: '#fff', border: 0, borderRadius: 8, padding: 10, opacity: saving ? 0.6 : 1 }}>
                 {saving ? 'جارٍ الحفظ…' : 'تأكيد الحفظ'}
