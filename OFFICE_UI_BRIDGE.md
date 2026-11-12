@@ -9,6 +9,7 @@
 - يستمع إلى `127.0.0.1` فقط ويتطلب `OFFICE_API_TOKEN`.
 - `GET /health` و`GET /api/office` للقراءة فقط؛ طلبات POST/PUT/DELETE مرفوضة.
 - محول `ui-bridge/office-route.ts` يمرر بيانات المؤسسة إلى واجهة المكتب.
+- Water Cooler يعرض محادثات `ceo_chat` والرسائل الداخلية ذات النوع `msg` فقط؛ إشعارات المهام والتقارير والمراجعات (`task` و`report` و`review`) لا تظهر كمحادثات، وتبقى أحداثها في سجل النشاط.
 - محول `ui-bridge/actions-route.ts` يقرأ جدول `approvals` ويعرض في Quest Log الطلبات التي حالتها في قاعدة البيانات `pending` فقط.
 - تفاصيل حمولة الموافقة تُنقّح قبل عرضها لإخفاء مفاتيح مثل token وsecret وpassword وapi_key.
 - عناصر الموافقة في Quest Log تحمل علامة عرض فقط. لا توجد أزرار اعتماد فعالة، وPOST على مسار actions يرجع 405.
