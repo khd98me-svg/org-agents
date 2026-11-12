@@ -133,6 +133,25 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("MANAGE_ROUTE", installer)
 
 
+    def test_audit_log_is_enriched_and_filterable_without_write_controls(self):
+        root = Path(__file__).parent
+        route = (root / "ui-bridge" / "office-route.ts").read_text(encoding="utf-8")
+        dashboard = (root / "ui-bridge" / "organization-page.tsx").read_text(encoding="utf-8")
+        self.assertIn("id: String(item.id ?? '')", route)
+        self.assertIn("action: String(item.action || 'unknown')", route)
+        self.assertIn("details: String(item.details || '')", route)
+        self.assertIn("agentNames.get(actorId[1])", route)
+        for marker in (
+            "auditQuery", "auditActionFilter", "auditActorFilter",
+            "auditFrom", "auditTo", "auditSort", "filteredAuditLog",
+            "مسح عوامل التصفية", "التفاصيل:", "يعرض ",
+        ):
+            self.assertIn(marker, dashboard)
+        audit_section = dashboard.split("{tab === 'audit' &&", 1)[1].split("{tab === 'reviews' &&", 1)[0]
+        self.assertNotIn("method: 'POST'", audit_section)
+        self.assertNotIn("fetch(", audit_section)
+        self.assertIn("activityLog", dashboard)
+
     def test_owner_confirmed_profile_updates_are_allowlisted_and_audited(self):
         result = office_api.update_profile({
             "operation": "agent_profile", "id": 1,
