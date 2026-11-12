@@ -119,6 +119,76 @@ def snapshot(limit=100):
         }
 
 
+def connect_writable():
+    """Open the existing database for narrowly scoped, audited management writes."""
+    if not DB_PATH.is_file():
+        raise FileNotFoundError("Database file not found: " + str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=5)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def update_profile(payload):
+    """Update only agent name/specialty or department name/description."""
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_payload")
+    operation = payload.get("operation")
+    entity_id = payload.get("id")
+    if isinstance(entity_id, bool) or not isinstance(entity_id, int) or entity_id < 1:
+        raise ValueError("invalid_id")
+
+    limits = {
+        "agent_profile": {"name": 80, "specialty": 200},
+        "department_profile": {"name": 80, "description": 500},
+    }
+    if operation not in limits:
+        raise ValueError("unsupported_operation")
+    fields = limits[operation]
+    values = {}
+    for key, maximum in fields.items():
+        if key in payload:
+            value = payload[key]
+            if not isinstance(value, str):
+                raise ValueError("invalid_" + key)
+            value = value.strip()
+            if not value or len(value) > maximum:
+                raise ValueError("invalid_" + key)
+            values[key] = value
+    if not values:
+        raise ValueError("no_changes")
+
+    table = "agents" if operation == "agent_profile" else "departments"
+    with connect_writable() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        exists = conn.execute("SELECT 1 FROM " + table + " WHERE id=?", (entity_id,)).fetchone()
+        if not exists:
+            raise LookupError("not_found")
+        if operation == "agent_profile":
+            if "name" in values:
+                conn.execute("UPDATE agents SET name=? WHERE id=?", (values["name"], entity_id))
+            if "specialty" in values:
+                conn.execute("UPDATE agents SET specialty=? WHERE id=?", (values["specialty"], entity_id))
+        else:
+            if "name" in values:
+                duplicate = conn.execute("SELECT 1 FROM departments WHERE name=? AND id<>?",
+                                         (values["name"], entity_id)).fetchone()
+                if duplicate:
+                    raise ValueError("department_name_exists")
+                conn.execute("UPDATE departments SET name=? WHERE id=?", (values["name"], entity_id))
+            if "description" in values:
+                conn.execute("UPDATE departments SET description=? WHERE id=?", (values["description"], entity_id))
+        if not table_exists(conn, "audit"):
+            raise RuntimeError("audit_table_missing")
+        conn.execute(
+            "INSERT INTO audit(actor,action,details,created_at) VALUES(?,?,?,datetime('now'))",
+            ("owner", operation + "_updated",
+             "id=%d fields=%s" % (entity_id, ",".join(sorted(values)))),
+        )
+        conn.commit()
+    return {"ok": True, "operation": operation, "id": entity_id, "updated_fields": sorted(values)}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "OfficeReadOnlyBridge/0.1"
 
@@ -161,7 +231,37 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(500, {"ok": False, "error": "internal_error"})
 
     def do_POST(self):
-        self.send_json(405, {"ok": False, "error": "read_only_api"})
+        supplied = self.headers.get("Authorization", "")
+        expected = "Bearer " + TOKEN
+        if not TOKEN or not hmac.compare_digest(supplied, expected):
+            self.send_json(401, {"ok": False, "error": "unauthorized"})
+            return
+        if urlparse(self.path).path != "/api/office/manage":
+            self.send_json(404, {"ok": False, "error": "not_found"})
+            return
+        owner_token = self.headers.get("X-Office-Owner-Token", "")
+        expected_owner = os.environ.get("OFFICE_OWNER_TOKEN", "")
+        if not expected_owner or len(expected_owner) < 32 or not hmac.compare_digest(owner_token, expected_owner):
+            self.send_json(403, {"ok": False, "error": "owner_confirmation_required"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 2 or length > 8192:
+                self.send_json(413, {"ok": False, "error": "invalid_body_size"})
+                return
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            result = update_profile(payload)
+            self.send_json(200, result)
+        except LookupError:
+            self.send_json(404, {"ok": False, "error": "not_found"})
+        except ValueError as exc:
+            self.send_json(400, {"ok": False, "error": str(exc)})
+        except sqlite3.IntegrityError:
+            self.send_json(409, {"ok": False, "error": "conflict"})
+        except FileNotFoundError:
+            self.send_json(503, {"ok": False, "error": "database_unavailable"})
+        except Exception:
+            self.send_json(500, {"ok": False, "error": "management_write_failed"})
 
     def do_PUT(self):
         self.send_json(405, {"ok": False, "error": "read_only_api"})
@@ -184,7 +284,7 @@ def main():
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("Read-only office API: http://%s:%d/api/office" % (HOST, PORT))
     print("Database: %s" % DB_PATH)
-    print("No database writes or agent execution are enabled.")
+    print("Only owner-confirmed agent/department profile edits are enabled; task and agent execution remain disabled.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
