@@ -101,6 +101,89 @@ export async function GET(request: Request) {
       makeAgent(agent, tables.runs || [], tables.tasks || [], now),
     );
 
+    const rawDepartments = tables.departments || [];
+    const rawTasks = tables.tasks || [];
+    const rawRuns = tables.runs || [];
+    const agentNames = new Map((tables.agents || []).map(agent => [
+      String(agent.id), String(agent.name || `Agent ${agent.id}`),
+    ]));
+    const departmentNames = new Map(rawDepartments.map(dept => [
+      String(dept.id), String(dept.name || `Department ${dept.id}`),
+    ]));
+
+    const departments = rawDepartments.map(dept => {
+      const members = (tables.agent_departments || [])
+        .filter(link => String(link.department_id) === String(dept.id) && String(link.status || 'active') === 'active')
+        .map(link => ({
+          id: String(link.agent_id),
+          name: agentNames.get(String(link.agent_id)) || `Agent #${link.agent_id}`,
+          role: String(link.role || 'member'),
+        }));
+      return {
+        id: String(dept.id),
+        name: String(dept.name || 'قسم بلا اسم'),
+        description: String(dept.description || ''),
+        status: String(dept.status || 'unknown'),
+        manager: dept.manager_agent_id == null ? null : {
+          id: String(dept.manager_agent_id),
+          name: agentNames.get(String(dept.manager_agent_id)) || `Agent #${dept.manager_agent_id}`,
+        },
+        parentId: dept.parent_department_id == null ? null : String(dept.parent_department_id),
+        members,
+        taskCount: rawTasks.filter(task => String(task.department_id || '') === String(dept.id)).length,
+      };
+    });
+
+    const tasks = rawTasks.map(task => ({
+      id: String(task.id),
+      title: String(task.title || `Task #${task.id}`),
+      description: String(task.description || '').slice(0, 500),
+      status: String(task.status || 'unknown'),
+      priority: String(task.priority || 'normal'),
+      assignedTo: task.assigned_to == null ? null : {
+        id: String(task.assigned_to),
+        name: agentNames.get(String(task.assigned_to)) || `Agent #${task.assigned_to}`,
+      },
+      department: task.department_id == null ? null : {
+        id: String(task.department_id),
+        name: departmentNames.get(String(task.department_id)) || `Department #${task.department_id}`,
+      },
+      parentId: task.parent_id == null ? null : String(task.parent_id),
+      createdAt: task.created_at || '',
+      updatedAt: task.updated_at || '',
+      result: String(task.result || '').slice(0, 500),
+      score: task.score == null ? null : task.score,
+    }));
+
+    const activeWindowMs = Number(process.env.OFFICE_ACTIVE_WINDOW_MS || 5 * 60 * 1000);
+    const runs = rawRuns.map(run => {
+      const updatedMs = epoch(run.updated || run.created);
+      const sourceRunning = isRunning(run.status);
+      const linkedTask = rawTasks.find(task => String(task.id) === String(run.task_id));
+      return {
+        id: String(run.id),
+        taskId: run.task_id == null ? null : String(run.task_id),
+        taskTitle: linkedTask?.title || `Task #${run.task_id ?? '?'}`,
+        agentId: run.agent_id == null ? null : String(run.agent_id),
+        agentName: agentNames.get(String(run.agent_id)) || `Agent #${run.agent_id ?? '?'}`,
+        status: String(run.status || 'unknown'),
+        steps: Number(run.steps || 0),
+        createdAt: run.created || '',
+        updatedAt: run.updated || '',
+        isFresh: Boolean(sourceRunning && updatedMs > 0 && now - updatedMs <= activeWindowMs),
+      };
+    });
+
+    const reviews = (tables.reviews || []).map(review => ({
+      id: String(review.id),
+      taskId: review.task_id == null ? null : String(review.task_id),
+      reviewer: String(review.reviewer || 'unknown'),
+      verdict: String(review.verdict || 'unknown'),
+      score: review.score == null ? null : review.score,
+      notes: String(review.notes || '').slice(0, 500),
+      ts: review.ts || '',
+    }));
+
     const activityLog = (tables.audit || []).slice(0, 80).map(item => ({
       t: item.created_at || '',
       who: String(item.actor || 'system'),
@@ -136,6 +219,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       agents,
+      departments,
+      tasks,
+      runs,
+      reviews,
       activityLog,
       chatLog,
       setupCheck: {
@@ -145,6 +232,16 @@ export async function GET(request: Request) {
       organization: {
         mode: 'read_only',
         counts: snapshot.counts || {},
+        summary: {
+          departments: departments.length,
+          agents: agents.length,
+          tasks: tasks.length,
+          runs: runs.length,
+          pendingTasks: tasks.filter(task => ['pending', 'assigned', 'blocked'].includes(task.status)).length,
+          submittedTasks: tasks.filter(task => task.status === 'submitted').length,
+          completedTasks: tasks.filter(task => task.status === 'done').length,
+          freshRuns: runs.filter(run => run.isFresh).length,
+        },
       },
       timestamp: new Date().toISOString(),
     }, {
