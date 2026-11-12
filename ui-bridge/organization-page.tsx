@@ -5,7 +5,7 @@ import { useAuthenticatedFetch } from '../../hooks/useAuthenticatedFetch';
 
 type Item = Record<string, any>;
 type Data = {
-  agents?: Item[]; departments?: Item[]; tasks?: Item[]; runs?: Item[]; reviews?: Item[];
+  agents?: Item[]; departments?: Item[]; tasks?: Item[]; runs?: Item[]; reviews?: Item[]; activityLog?: Item[];
   organization?: { summary?: Record<string, number> }; timestamp?: string;
 };
 const labels: Record<string, string> = {
@@ -120,6 +120,7 @@ export default function OrganizationDashboard() {
   const tasks = data?.tasks || [];
   const runs = data?.runs || [];
   const reviews = data?.reviews || [];
+  const activityLog = data?.activityLog || [];
   const departments = data?.departments || [];
   const agents = data?.agents || [];
   const selectedAgent = agents.find(agent => String(agent.id) === selectedAgentId) || null;
@@ -129,6 +130,7 @@ export default function OrganizationDashboard() {
     ['tasks', 'المهام', summary.tasks ?? tasks.length],
     ['runs', 'التشغيلات', runs.length],
     ['reviews', 'المراجعات', reviews.length],
+    ['audit', 'سجل التدقيق', activityLog.length],
   ];
 
   const filteredTasks = useMemo(() => {
@@ -358,6 +360,17 @@ export default function OrganizationDashboard() {
             {!runs.length && <div style={panel}>لا توجد تشغيلات ضمن السجلات المسترجعة.</div>}
           </section>
         </>}
+
+        {tab === 'audit' && <section style={{ display: 'grid', gap: 9 }}>
+          <div style={{ ...muted, marginBottom: 4 }}>سجل تغييرات المؤسسة كما سجّلها المحرك. هذا القسم للعرض فقط ولا يتيح تعديل السجل أو حذف أحداثه.</div>
+          {activityLog.map((entry: Item, index: number) =>
+            <article key={String(entry.id || index)} style={panel}>
+              <strong>{entry.text || 'حدث مسجل'}</strong>
+              <div style={{ ...muted, marginTop: 6 }}>المنفذ: {entry.who || 'غير محدد'} · {date(entry.t)}</div>
+            </article>
+          )}
+          {!activityLog.length && <div style={panel}>لا توجد أحداث تدقيق ضمن السجلات المسترجعة.</div>}
+        </section>}
 
         {tab === 'reviews' && <section style={{ display: 'grid', gap: 9 }}>
           {reviews.map(review =>
