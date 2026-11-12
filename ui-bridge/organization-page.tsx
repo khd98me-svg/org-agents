@@ -157,7 +157,7 @@ export default function OrganizationDashboard() {
         <div>
           <div style={{ color: '#8fa8ce', fontSize: 11, letterSpacing: 1 }}>ORGANIZATION CONTROL ROOM</div>
           <h1 style={{ fontSize: 24, margin: '6px 0' }}>لوحة المؤسسة</h1>
-          <div style={muted}>organization.db · وضع القراءة فقط · تحديث تلقائي كل 15 ثانية</div>
+          <div style={muted}>organization.db · قراءة مع تعديل محدود · تحديث تلقائي كل 15 ثانية</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a href="/" style={{ color: '#b8c9e6', textDecoration: 'none', border: '1px solid #39465c', padding: '8px 12px', borderRadius: 8 }}>المكتب الافتراضي</a>
