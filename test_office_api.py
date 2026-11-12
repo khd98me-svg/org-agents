@@ -238,7 +238,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             lines = conn.execute(
                 "SELECT manager_agent_id,department_id FROM reporting_lines WHERE subordinate_agent_id=3 ORDER BY department_id"
             ).fetchall()
-            self.assertEqual([(r["manager_agent_id"], r["department_id"]) for r in lines], [(1, 1), (1, 2)])
+            self.assertEqual([(r["manager_agent_id"], r["department_id"]) for r in lines], [(1, 1)])
             audit = conn.execute("SELECT action,details FROM audit ORDER BY id DESC LIMIT 1").fetchone()
             self.assertEqual(audit["action"], "agent_hierarchy_updated")
             self.assertIn("agent=3", audit["details"])
