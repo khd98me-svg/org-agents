@@ -230,11 +230,24 @@ export async function GET(request: Request) {
       ts: review.ts || '',
     }));
 
-    const activityLog = (tables.audit || []).slice(0, 80).map(item => ({
-      t: item.created_at || '',
-      who: String(item.actor || 'system'),
-      text: [item.action, item.details].filter(Boolean).join(': '),
-    }));
+    const activityLog = (tables.audit || []).slice(0, 80).map(item => {
+      const actor = String(item.actor || 'system');
+      const actorId = /^(?:agent)?(\d+)$/i.exec(actor);
+      const who = actor === 'owner' ? 'المالك'
+        : actor.toLowerCase() === 'system' ? 'النظام'
+        : actor === 'CEO' ? 'الرئيس التنفيذي'
+        : actorId ? (agentNames.get(actorId[1]) || 'الوكيل #' + actorId[1])
+        : actor;
+      return {
+        id: String(item.id ?? ''),
+        action: String(item.action || 'unknown'),
+        details: String(item.details || ''),
+        actor,
+        t: item.created_at || '',
+        who,
+        text: [item.action, item.details].filter(Boolean).join(': '),
+      };
+    });
 
     // Water Cooler is a conversation view, not a task-lifecycle feed.
     // Reuse agentNames created above for department/task labels as well.
