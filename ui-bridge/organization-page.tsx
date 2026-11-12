@@ -282,6 +282,7 @@ export default function OrganizationDashboard() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <a href="/" style={{ color: '#b8c9e6', textDecoration: 'none', border: '1px solid #39465c', padding: '8px 12px', borderRadius: 8 }}>المكتب الافتراضي</a>
+          <a href="/tasks" style={{ color: '#b8c9e6', textDecoration: 'none', border: '1px solid #52627b', padding: '8px 12px', borderRadius: 8 }}>إدارة المهام</a>
           <button onClick={load} style={{ background: '#263b5a', color: 'white', border: 0, padding: '9px 13px', borderRadius: 8 }}>تحديث الآن</button>
         </div>
       </header>
