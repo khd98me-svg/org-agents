@@ -10,6 +10,7 @@ UI_ROOT = Path.home() / "openclawfice"
 PAGE = UI_ROOT / "app" / "page.tsx"
 ROUTE = UI_ROOT / "app" / "api" / "office" / "route.ts"
 ACTIONS_ROUTE = UI_ROOT / "app" / "api" / "office" / "actions" / "route.ts"
+MANAGE_ROUTE = UI_ROOT / "app" / "api" / "office" / "manage" / "route.ts"
 INSTRUMENTATION = UI_ROOT / "instrumentation.ts"
 LEGACY_CONFIG = UI_ROOT / "app" / "api" / "office" / "config" / "route.ts"
 LEGACY_MEETING = UI_ROOT / "app" / "api" / "office" / "meeting" / "route.ts"
@@ -17,6 +18,7 @@ LEGACY_AUTOWORK = UI_ROOT / "app" / "api" / "office" / "autowork" / "route.ts"
 LEGACY_CHAT = UI_ROOT / "app" / "api" / "office" / "chat" / "route.ts"
 ROUTE_SOURCE = REPO_ROOT / "ui-bridge" / "office-route.ts"
 ACTIONS_SOURCE = REPO_ROOT / "ui-bridge" / "actions-route.ts"
+MANAGE_SOURCE = REPO_ROOT / "ui-bridge" / "manage-route.ts"
 INSTRUMENTATION_SOURCE = REPO_ROOT / "ui-bridge" / "instrumentation-safe.ts"
 LEGACY_CONFIG_SOURCE = REPO_ROOT / "ui-bridge" / "legacy-config-route.ts"
 LEGACY_MEETING_SOURCE = REPO_ROOT / "ui-bridge" / "legacy-meeting-route.ts"
@@ -102,7 +104,7 @@ def configure_env():
 
 
 def main():
-    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE)):
+    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, MANAGE_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE)):
         raise SystemExit("Required file missing. Expected ~/openclawfice and both bridge route sources.")
     page_text = PAGE.read_text(encoding="utf-8")
 
@@ -147,6 +149,7 @@ def main():
         (PAGE, "page.tsx"),
         (ROUTE, "office-route.ts"),
         (ACTIONS_ROUTE, "actions-route.ts"),
+        (MANAGE_ROUTE, "manage-route.ts"),
         (ORG_PAGE, "organization-page.tsx"),
         (INSTRUMENTATION, "instrumentation.ts"),
         (LEGACY_CONFIG, "legacy-config-route.ts"),
@@ -166,6 +169,7 @@ def main():
     for target, source, label in (
         (ROUTE, ROUTE_SOURCE, "office-route.ts"),
         (ACTIONS_ROUTE, ACTIONS_SOURCE, "actions-route.ts"),
+        (MANAGE_ROUTE, MANAGE_SOURCE, "manage-route.ts"),
         (INSTRUMENTATION, INSTRUMENTATION_SOURCE, "instrumentation.ts"),
         (LEGACY_CONFIG, LEGACY_CONFIG_SOURCE, "legacy-config-route.ts"),
         (LEGACY_MEETING, LEGACY_MEETING_SOURCE, "legacy-meeting-route.ts"),
@@ -185,7 +189,8 @@ def main():
     print("Installed the read-only organization adapter, Quest Log feed and organization dashboard.")
     print(f"Backup: {backup_dir}")
     print("Quest Log displays only approvals whose database status is pending.")
-    print("Approval decisions remain disabled; no database or engine files were changed.")
+    print("Approval decisions and agent execution remain disabled.")
+    print("Owner-confirmed profile edits are limited to agent name/specialty and department name/description; each edit is audited.")
     print("Legacy OpenClaw autowork and watercooler background tickers are disabled.")
     print("Legacy config, meeting, autowork, and chat write endpoints return HTTP 405.")
     print("Organization dashboard: http://localhost:3333/organization")
