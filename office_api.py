@@ -323,13 +323,15 @@ def update_profile(payload):
             if "manager_id" in payload or "department_ids" in payload:
                 conn.execute("DELETE FROM reporting_lines WHERE subordinate_agent_id=?", (entity_id,))
                 if new_manager is not None:
-                    for did in new_departments:
-                        conn.execute(
-                            """INSERT OR IGNORE INTO reporting_lines
-                               (manager_agent_id,subordinate_agent_id,department_id,relation)
-                               VALUES(?,?,?,'reports_to')""",
-                            (new_manager, entity_id, did),
-                        )
+                    # reporting_lines has UNIQUE(manager_agent_id, subordinate_agent_id),
+                    # so keep one representative department link for this manager pair.
+                    reporting_department = new_departments[0] if new_departments else None
+                    conn.execute(
+                        """INSERT OR IGNORE INTO reporting_lines
+                           (manager_agent_id,subordinate_agent_id,department_id,relation)
+                           VALUES(?,?,?,'reports_to')""",
+                        (new_manager, entity_id, reporting_department),
+                    )
 
             changed = []
             if "manager_id" in payload and new_manager != old_manager:
