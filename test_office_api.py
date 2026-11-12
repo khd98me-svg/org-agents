@@ -108,7 +108,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("ownTasks", route)
         self.assertIn("ownRuns", route)
         self.assertIn("ownReviews", route)
-        self.assertIn("const agentKey = /^agent(\\\\d+)$/i.exec(reviewer)", route)
+        self.assertIn("const agentKey = /^agent(\\d+)$/i.exec(reviewer)", route)
         self.assertIn("(agentKey !== null && agentKey[1] === id)", route)
         self.assertIn("['agents', 'الوكلاء', agents.length]", dashboard)
         self.assertIn("ملف للعرض فقط", dashboard)
