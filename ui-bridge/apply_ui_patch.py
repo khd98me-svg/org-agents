@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely install the organization-engine /api/office adapter into local OpenClawfice."""
+"""Safely install the read-only organization adapter and Quest Log approvals feed."""
 from datetime import datetime, timezone
 from pathlib import Path
 import secrets
@@ -9,7 +9,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 UI_ROOT = Path.home() / "openclawfice"
 PAGE = UI_ROOT / "app" / "page.tsx"
 ROUTE = UI_ROOT / "app" / "api" / "office" / "route.ts"
+ACTIONS_ROUTE = UI_ROOT / "app" / "api" / "office" / "actions" / "route.ts"
 ROUTE_SOURCE = REPO_ROOT / "ui-bridge" / "office-route.ts"
+ACTIONS_SOURCE = REPO_ROOT / "ui-bridge" / "actions-route.ts"
 ENV_FILE = UI_ROOT / ".env.local"
 
 OLD = """              needs: defaults.needs,
@@ -22,6 +24,38 @@ NEW = """              // Preserve source values, including legitimate zero/empt
               skills: Array.isArray(a.skills) ? a.skills : defaults.skills,
               xp: typeof a.xp === 'number' ? a.xp : defaults.xp,
               level: typeof a.level === 'number' ? a.level : defaults.level,"""
+
+READ_ONLY_START = """              {/* Options buttons */}"""
+READ_ONLY_WRAPPED_START = """              {action.data?.readOnly ? (
+                <div style={{
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.35)',
+                  borderRadius: 6,
+                  padding: 10,
+                  color: '#fbbf24',
+                  fontSize: 11,
+                  lineHeight: 1.6,
+                }}>
+                  🛡️ عرض فقط — هذا طلب موافقة حقيقي من محرك المؤسسة.
+                  <br />
+                  أزرار الاعتماد غير مفعّلة حتى يكتمل ربط القرار الآمن بالمحرك.
+                </div>
+              ) : (
+                <>
+              {/* Options buttons */}"""
+
+READ_ONLY_END = """              )}
+            </div>
+          </div>
+        );
+      })()}"""
+READ_ONLY_WRAPPED_END = """              )}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}"""
 
 
 def configure_env():
@@ -56,39 +90,58 @@ def configure_env():
 
 
 def main():
-    if not PAGE.is_file() or not ROUTE_SOURCE.is_file():
-        raise SystemExit("Required file missing. Expected ~/openclawfice and this repository checkout.")
+    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE)):
+        raise SystemExit("Required file missing. Expected ~/openclawfice and both bridge route sources.")
     page_text = PAGE.read_text(encoding="utf-8")
+
     if OLD in page_text:
         patched_page = page_text.replace(OLD, NEW, 1)
     elif NEW in page_text:
         patched_page = page_text
     else:
-        raise SystemExit("OpenClawfice page block differs from the reviewed version; stopped without changes.")
+        raise SystemExit("OpenClawfice agent normalization block differs; stopped without changes.")
+
+    if READ_ONLY_START in patched_page:
+        patched_page = patched_page.replace(READ_ONLY_START, READ_ONLY_WRAPPED_START, 1)
+        if READ_ONLY_END not in patched_page:
+            raise SystemExit("Quest modal closing block differs; stopped without changes.")
+        patched_page = patched_page.replace(READ_ONLY_END, READ_ONLY_WRAPPED_END, 1)
+    elif READ_ONLY_WRAPPED_START in patched_page and READ_ONLY_WRAPPED_END in patched_page:
+        pass
+    else:
+        raise SystemExit("Quest Log modal differs from reviewed version; stopped without changes.")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_dir = Path.home() / ".cache" / "office-ui-bridge-backups" / stamp
     backup_dir.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(PAGE, backup_dir / "page.tsx")
-    if ROUTE.exists():
-        shutil.copy2(ROUTE, backup_dir / "route.ts")
-    if ENV_FILE.exists():
-        shutil.copy2(ENV_FILE, backup_dir / ".env.local")
+    for path, name in (
+        (PAGE, "page.tsx"),
+        (ROUTE, "office-route.ts"),
+        (ACTIONS_ROUTE, "actions-route.ts"),
+        (ENV_FILE, ".env.local"),
+    ):
+        if path.exists():
+            shutil.copy2(path, backup_dir / name)
 
     temp_page = PAGE.with_name("page.tsx.office-ui-bridge.tmp")
     temp_page.write_text(patched_page, encoding="utf-8")
     temp_page.replace(PAGE)
 
     ROUTE.parent.mkdir(parents=True, exist_ok=True)
-    temp_route = ROUTE.with_name("route.ts.office-ui-bridge.tmp")
-    shutil.copy2(ROUTE_SOURCE, temp_route)
-    temp_route.replace(ROUTE)
-    configure_env()
+    for target, source, label in (
+        (ROUTE, ROUTE_SOURCE, "office-route.ts"),
+        (ACTIONS_ROUTE, ACTIONS_SOURCE, "actions-route.ts"),
+    ):
+        temp = target.with_name(target.name + ".office-ui-bridge.tmp")
+        shutil.copy2(source, temp)
+        temp.replace(target)
 
-    print("Installed the read-only organization adapter.")
+    configure_env()
+    print("Installed the read-only organization adapter and Quest Log approvals feed.")
     print(f"Backup: {backup_dir}")
-    print("A local bridge URL and secret are saved in .env.local; the secret was not displayed.")
-    print("No database, agent runtime, or existing engine files were changed.")
+    print("Quest Log displays only approvals whose database status is pending.")
+    print("Approval decisions remain disabled; no database, agent runtime, or engine files were changed.")
+    print("The local bridge secret remains in .env.local and was not displayed.")
 
 
 if __name__ == "__main__":
