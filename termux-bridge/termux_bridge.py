@@ -77,7 +77,8 @@ def git_status():
         if not root.is_dir():
             out.append(f"{name}: directory missing")
             continue
-        p = subprocess.run(["git", "-C", str(root), "status", "--short", "--branch"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15)\n        branch = p.stdout.strip() if p.returncode == 0 else "git status unavailable: " + p.stdout.strip()
+        p = subprocess.run(["git", "-C", str(root), "status", "--short", "--branch"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15)
+        branch = p.stdout.strip() if p.returncode == 0 else "git status unavailable: " + p.stdout.strip()
         out.append(f"--- {name} ---\n{branch}")
     return "\n".join(out)
 
