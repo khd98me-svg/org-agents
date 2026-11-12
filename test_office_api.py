@@ -99,6 +99,20 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertNotIn("/api/office/actions", source)
         self.assertIn("جميع البيانات للعرض فقط", source)
 
+    def test_agent_profiles_are_read_only_and_linked_to_org_records(self):
+        root = Path(__file__).parent
+        route = (root / "ui-bridge" / "office-route.ts").read_text(encoding="utf-8")
+        dashboard = (root / "ui-bridge" / "organization-page.tsx").read_text(encoding="utf-8")
+        self.assertIn("const enrichedAgents = agents.map", route)
+        self.assertIn("reportsTo, directReports", route)
+        self.assertIn("ownTasks", route)
+        self.assertIn("ownRuns", route)
+        self.assertIn("ownReviews", route)
+        self.assertIn("['agents', 'الوكلاء', agents.length]", dashboard)
+        self.assertIn("ملف للعرض فقط", dashboard)
+        self.assertNotIn("/api/office/agents", dashboard)
+        self.assertNotIn("method: 'POST'", route)
+
     def test_database_connection_is_read_only(self):
         with office_api.connect_readonly() as conn:
             with self.assertRaises(sqlite3.OperationalError):
