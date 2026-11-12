@@ -190,7 +190,7 @@ def update_profile(payload):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "OfficeReadOnlyBridge/0.1"
+    server_version = "OfficeManagementBridge/0.2"
 
     def send_json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
