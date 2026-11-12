@@ -178,11 +178,104 @@ def _would_create_department_cycle(conn, department_id, parent_id):
     return row is not None
 
 
+def manage_task(payload):
+    """Create and assign tasks only; never starts an agent run."""
+    operation = payload.get("operation")
+    if operation == "task_create":
+        allowed = {"operation", "confirm", "title", "description", "department_id", "priority"}
+        if set(payload) - allowed:
+            raise ValueError("unsupported_fields")
+        title = payload.get("title")
+        description = payload.get("description", "")
+        priority = payload.get("priority", "normal")
+        if not isinstance(title, str) or not title.strip() or len(title.strip()) > 200:
+            raise ValueError("invalid_title")
+        if not isinstance(description, str) or len(description) > 2000:
+            raise ValueError("invalid_description")
+        if priority not in ("low", "normal", "high", "urgent"):
+            raise ValueError("invalid_priority")
+        department_id = _positive_id(payload.get("department_id"), "department_id", nullable=True)
+        with closing(connect_writable()) as conn:
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("BEGIN IMMEDIATE")
+            if not table_exists(conn, "tasks") or not table_exists(conn, "audit"):
+                raise RuntimeError("task_tables_missing")
+            if department_id is not None:
+                dept = conn.execute("SELECT status FROM departments WHERE id=?", (department_id,)).fetchone()
+                if not dept or dept["status"] != "active":
+                    raise ValueError("department_not_found_or_inactive")
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(tasks)")}
+            required = {"title", "description", "assigned_to", "status", "created_at", "department_id", "parent_id", "priority", "updated_at", "dept_hint"}
+            if not required.issubset(columns):
+                raise RuntimeError("task_schema_incomplete")
+            cur = conn.execute(
+                """INSERT INTO tasks(title,description,assigned_to,status,created_at,department_id,parent_id,priority,updated_at,dept_hint)
+                   VALUES(?,?,NULL,'pending',datetime('now'),?,NULL,?,datetime('now'),'')""",
+                (title.strip(), description.strip(), department_id, priority),
+            )
+            task_id = cur.lastrowid
+            conn.execute(
+                "INSERT INTO audit(actor,action,details,created_at) VALUES('owner','task_created',?,datetime('now'))",
+                ("id=%d %s" % (task_id, title.strip()[:80]),),
+            )
+            conn.commit()
+        return {"ok": True, "operation": operation, "id": task_id, "status": "pending"}
+
+    if operation == "task_assign":
+        allowed = {"operation", "id", "assigned_to", "confirm"}
+        if set(payload) - allowed:
+            raise ValueError("unsupported_fields")
+        task_id = _positive_id(payload.get("id"), "id")
+        agent_id = _positive_id(payload.get("assigned_to"), "assigned_to", nullable=True)
+        with closing(connect_writable()) as conn:
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("BEGIN IMMEDIATE")
+            if not table_exists(conn, "tasks") or not table_exists(conn, "audit"):
+                raise RuntimeError("task_tables_missing")
+            task = conn.execute("SELECT title,description,status,assigned_to FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if not task:
+                raise LookupError("task_not_found")
+            if task["status"] not in ("pending", "assigned", "blocked"):
+                raise ValueError("task_locked")
+            if agent_id is not None:
+                _agent_exists(conn, agent_id, "assignee")
+            if task["assigned_to"] == agent_id:
+                raise ValueError("no_changes")
+            next_status = "assigned" if agent_id is not None else "pending"
+            conn.execute(
+                "UPDATE tasks SET assigned_to=?,status=?,updated_at=datetime('now') WHERE id=?",
+                (agent_id, next_status, task_id),
+            )
+            if agent_id is not None:
+                if not table_exists(conn, "messages"):
+                    raise RuntimeError("messages_table_missing")
+                body = "مهمة جديدة #%d: %s\\n%s" % (task_id, task["title"], task["description"] or "")
+                conn.execute(
+                    "INSERT INTO messages(ts,sender,recipient,task_id,kind,body,is_read) VALUES(datetime('now'),NULL,?,?,'task',?,0)",
+                    (agent_id, task_id, body[:2000]),
+                )
+                action = "task_assigned"
+                details = "task=%d agent=%d" % (task_id, agent_id)
+            else:
+                action = "task_unassigned"
+                details = "task=%d previous_agent=%s" % (task_id, task["assigned_to"])
+            conn.execute(
+                "INSERT INTO audit(actor,action,details,created_at) VALUES('owner',?,?,datetime('now'))",
+                (action, details),
+            )
+            conn.commit()
+        return {"ok": True, "operation": operation, "id": task_id, "assigned_to": agent_id, "status": next_status}
+
+    raise ValueError("unsupported_operation")
+
+
 def update_profile(payload):
     """Apply narrowly allowlisted, owner-confirmed profile or hierarchy changes."""
     if not isinstance(payload, dict):
         raise ValueError("invalid_payload")
     operation = payload.get("operation")
+    if operation in ("task_create", "task_assign"):
+        return manage_task(payload)
     entity_id = _positive_id(payload.get("id"), "id")
 
     profile_limits = {
@@ -476,7 +569,7 @@ def main():
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("Local office API: http://%s:%d/api/office" % (HOST, PORT))
     print("Database: %s" % DB_PATH)
-    print("Only owner-confirmed agent/department profile edits are enabled; task and agent execution remain disabled.")
+    print("Owner-confirmed agent/department profile edits and task creation/assignment are enabled; task execution and agent runs remain disabled.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
