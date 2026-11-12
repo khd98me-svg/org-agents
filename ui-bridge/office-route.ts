@@ -126,7 +126,12 @@ export async function GET(request: Request) {
       const ownRuns = rawRuns.filter(run => String(run.agent_id ?? '') === id);
       const ownReviews = rawReviews.filter(review => {
         const reviewer = String(review.reviewer ?? '').trim();
-        return reviewer === id || reviewer === String(agent.name || '').trim();
+        // Review records may store a numeric agent ID, the agent name,
+        // or the engine's stable "agent<N>" reviewer key.
+        const agentKey = /^agent(\\d+)$/i.exec(reviewer);
+        return reviewer === id ||
+          reviewer === String(agent.name || '').trim() ||
+          (agentKey !== null && agentKey[1] === id);
       });
       const reportsTo = rawReporting.filter(line => String(line.subordinate_agent_id) === id).map(line => ({
         managerId: String(line.manager_agent_id),
