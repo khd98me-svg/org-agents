@@ -104,12 +104,50 @@ export async function GET(request: Request) {
     const rawDepartments = tables.departments || [];
     const rawTasks = tables.tasks || [];
     const rawRuns = tables.runs || [];
+    const rawReviews = tables.reviews || [];
+    const rawLinks = tables.agent_departments || [];
+    const rawReporting = tables.reporting_lines || [];
     const agentNames = new Map((tables.agents || []).map(agent => [
       String(agent.id), String(agent.name || `Agent ${agent.id}`),
     ]));
     const departmentNames = new Map(rawDepartments.map(dept => [
       String(dept.id), String(dept.name || `Department ${dept.id}`),
     ]));
+
+    const enrichedAgents = agents.map(agent => {
+      const id = String(agent.id);
+      const memberships = rawLinks.filter(link =>
+        String(link.agent_id) === id && String(link.status || 'active') === 'active'
+      ).map(link => {
+        const dept = rawDepartments.find(item => String(item.id) === String(link.department_id));
+        return { id: String(link.department_id), name: dept?.name || ('Department #' + link.department_id), role: String(link.role || 'member') };
+      });
+      const ownTasks = rawTasks.filter(task => String(task.assigned_to ?? '') === id);
+      const ownRuns = rawRuns.filter(run => String(run.agent_id ?? '') === id);
+      const ownReviews = rawReviews.filter(review => String(review.reviewer ?? '') === id);
+      const reportsTo = rawReporting.filter(line => String(line.subordinate_agent_id) === id).map(line => ({
+        managerId: String(line.manager_agent_id),
+        managerName: agentNames.get(String(line.manager_agent_id)) || ('Agent #' + line.manager_agent_id),
+        relation: String(line.relation || 'reports_to'),
+      }));
+      const directReports = rawReporting.filter(line => String(line.manager_agent_id) === id).map(line => ({
+        agentId: String(line.subordinate_agent_id),
+        agentName: agentNames.get(String(line.subordinate_agent_id)) || ('Agent #' + line.subordinate_agent_id),
+        relation: String(line.relation || 'manages'),
+      }));
+      return { ...agent, departments: memberships, tasks: ownTasks.map(task => ({
+        id: String(task.id), title: String(task.title || ('Task #' + task.id)), status: String(task.status || 'unknown'),
+        priority: String(task.priority || 'normal'), updatedAt: task.updated_at || task.created_at || '',
+      })), runs: ownRuns.map(run => ({
+        id: String(run.id), taskId: run.task_id == null ? null : String(run.task_id),
+        status: String(run.status || 'unknown'), steps: Number(run.steps || 0),
+        createdAt: run.created || '', updatedAt: run.updated || '',
+      })), reviews: ownReviews.map(review => ({
+        id: String(review.id), taskId: review.task_id == null ? null : String(review.task_id),
+        verdict: String(review.verdict || 'unknown'), score: review.score ?? null,
+        notes: String(review.notes || '').slice(0, 300), ts: review.ts || '',
+      })), reportsTo, directReports };
+    });
 
     const departments = rawDepartments.map(dept => {
       const members = (tables.agent_departments || [])
@@ -211,7 +249,7 @@ export async function GET(request: Request) {
     ].filter(item => item.text).sort((a, b) => a.ts - b.ts).slice(-100);
 
     return NextResponse.json({
-      agents,
+      agents: enrichedAgents,
       departments,
       tasks,
       runs,
