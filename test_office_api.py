@@ -88,6 +88,10 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         installer = Path(__file__).parent / "ui-bridge" / "apply_ui_patch.py"
         ast.parse(installer.read_text(encoding="utf-8"), filename=str(installer))
 
+    def test_bridge_launcher_is_valid_python(self):
+        launcher = Path(__file__).parent / "run_office_api.py"
+        ast.parse(launcher.read_text(encoding="utf-8"), filename=str(launcher))
+
     def test_dashboard_source_is_separate_and_read_only(self):
         root = Path(__file__).parent
         installer = (root / "ui-bridge" / "apply_ui_patch.py").read_text(encoding="utf-8")
