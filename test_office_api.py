@@ -27,8 +27,11 @@ class OfficeApiSnapshotTests(unittest.TestCase):
                 manager_agent_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO departments VALUES (1, 'Strategy', 'Planning', NULL, 1, 'active', 'now');
             INSERT INTO departments VALUES (2, 'Operations', 'Delivery', NULL, NULL, 'active', 'now');
-            CREATE TABLE agent_departments (id INTEGER, agent_id INTEGER, department_id INTEGER, role TEXT,
-                status TEXT, assigned_at TEXT);
+            CREATE TABLE agent_departments (id INTEGER PRIMARY KEY, agent_id INTEGER, department_id INTEGER, role TEXT,
+                status TEXT, assigned_at TEXT, UNIQUE(agent_id, department_id));
+            CREATE TABLE reporting_lines (id INTEGER PRIMARY KEY, manager_agent_id INTEGER NOT NULL,
+                subordinate_agent_id INTEGER NOT NULL, department_id INTEGER, relation TEXT, created_at TEXT,
+                UNIQUE(manager_agent_id, subordinate_agent_id));
             INSERT INTO agent_departments VALUES (1, 1, 1, 'manager', 'active', 'now');
             INSERT INTO agent_departments VALUES (2, 2, 1, 'manager', 'active', 'now');
             INSERT INTO reporting_lines VALUES (1, 1, 2, 1, 'reports_to', 'now');
