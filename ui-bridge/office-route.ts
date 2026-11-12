@@ -107,17 +107,31 @@ export async function GET(request: Request) {
       text: [item.action, item.details].filter(Boolean).join(': '),
     }));
 
+    // Water Cooler is a conversation view, not a task-lifecycle feed.
+    // The organization engine records task/report/review events in the same
+    // messages table; only ordinary direct messages (kind='msg') belong here.
+    const agentNames = new Map(
+      (tables.agents || []).map(agent => [
+        String(agent.id),
+        String(agent.name || `Agent ${agent.id}`),
+      ]),
+    );
     const chatLog = [
       ...(tables.ceo_chat || []).map(item => ({
         from: String(item.role || 'CEO'),
         text: String(item.content || ''),
         ts: epoch(item.ts),
       })),
-      ...(tables.messages || []).map(item => ({
-        from: String(item.sender || 'unknown'),
-        text: String(item.body || ''),
-        ts: epoch(item.ts),
-      })),
+      ...(tables.messages || [])
+        .filter(item => String(item.kind || 'msg') === 'msg')
+        .map(item => {
+          const sender = item.sender == null ? 'owner' : String(item.sender);
+          return {
+            from: sender === 'owner' ? 'المالك' : (agentNames.get(sender) || `Agent #${sender}`),
+            text: String(item.body || ''),
+            ts: epoch(item.ts),
+          };
+        }),
     ].filter(item => item.text).sort((a, b) => a.ts - b.ts).slice(-100);
 
     return NextResponse.json({
