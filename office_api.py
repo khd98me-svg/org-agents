@@ -284,7 +284,7 @@ def main():
     with connect_readonly() as conn:
         conn.execute("SELECT name FROM sqlite_master LIMIT 1").fetchone()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print("Read-only office API: http://%s:%d/api/office" % (HOST, PORT))
+    print("Local office API: http://%s:%d/api/office" % (HOST, PORT))
     print("Database: %s" % DB_PATH)
     print("Only owner-confirmed agent/department profile edits are enabled; task and agent execution remain disabled.")
     try:
