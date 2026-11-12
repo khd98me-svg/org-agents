@@ -86,6 +86,19 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         installer = Path(__file__).parent / "ui-bridge" / "apply_ui_patch.py"
         ast.parse(installer.read_text(encoding="utf-8"), filename=str(installer))
 
+    def test_dashboard_source_is_separate_and_read_only(self):
+        root = Path(__file__).parent
+        installer = (root / "ui-bridge" / "apply_ui_patch.py").read_text(encoding="utf-8")
+        dashboard = root / "ui-bridge" / "organization-page.tsx"
+        self.assertTrue(dashboard.is_file())
+        self.assertIn('ORG_PAGE_SOURCE = (REPO_ROOT / "ui-bridge" / "organization-page.tsx")', installer)
+        source = dashboard.read_text(encoding="utf-8")
+        self.assertIn("filteredTasks", source)
+        self.assertIn("relatedRuns", source)
+        self.assertIn("relatedReviews", source)
+        self.assertNotIn("/api/office/actions", source)
+        self.assertIn("جميع البيانات للعرض فقط", source)
+
     def test_database_connection_is_read_only(self):
         with office_api.connect_readonly() as conn:
             with self.assertRaises(sqlite3.OperationalError):
