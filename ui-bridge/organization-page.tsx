@@ -40,6 +40,13 @@ export default function OrganizationDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [editor, setEditor] = useState<{ kind: 'agent' | 'department'; id: string; title: string } | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDetail, setEditDetail] = useState('');
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveNotice, setSaveNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -53,6 +60,46 @@ export default function OrganizationDashboard() {
       setLoading(false);
     }
   }, [authFetch]);
+
+  const openEditor = (kind: 'agent' | 'department', item: Item) => {
+    setEditor({ kind, id: String(item.id), title: String(item.name || '') });
+    setEditName(String(item.name || ''));
+    setEditDetail(kind === 'agent' ? String(item.role || '') : String(item.description || ''));
+    setConfirmSave(false);
+    setSaveError('');
+    setSaveNotice('');
+  };
+
+  const saveProfile = useCallback(async () => {
+    if (!editor || !confirmSave) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const payload: Item = {
+        operation: editor.kind === 'agent' ? 'agent_profile' : 'department_profile',
+        id: Number(editor.id),
+        name: editName,
+        confirm: true,
+      };
+      payload[editor.kind === 'agent' ? 'specialty' : 'description'] = editDetail;
+      const res = await authFetch('/api/office/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
+      setEditor(null);
+      setConfirmSave(false);
+      setSaveNotice('تم حفظ التعديل وتسجيله في سجل التدقيق.');
+      await load();
+    } catch (e: any) {
+      setSaveError(e?.message || 'تعذر حفظ التعديل');
+    } finally {
+      setSaving(false);
+    }
+  }, [authFetch, editor, confirmSave, editName, editDetail, load]);
 
   useEffect(() => {
     load();
@@ -110,6 +157,7 @@ export default function OrganizationDashboard() {
       </header>
 
       {error && <div role="alert" style={{ ...panel, borderColor: '#a34b4b', color: '#ffb9b9', marginBottom: 14 }}>تعذر تحميل البيانات: {error}</div>}
+      {saveNotice && <div role="status" style={{ ...panel, borderColor: '#397a55', color: '#a8e6bb', marginBottom: 14 }}>{saveNotice}</div>}
       {loading && !data && <div style={panel}>جارٍ تحميل بيانات المؤسسة…</div>}
 
       {data && <>
@@ -149,10 +197,16 @@ export default function OrganizationDashboard() {
                     <span key={m.id} style={{ background: '#222d3d', padding: '5px 8px', borderRadius: 6, fontSize: 12 }}>{m.name} · {m.role}</span>
                   )}
                 </div>
-                <button onClick={() => { setDepartmentFilter(String(dept.id)); setStatusFilter('all'); setQuery(''); setTab('tasks'); }}
-                  style={{ marginTop: 12, width: '100%', background: '#263b5a', color: '#edf2fa', border: 0, borderRadius: 8, padding: 9, cursor: 'pointer' }}>
-                  عرض مهام الإدارة
-                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, marginTop: 12 }}>
+                  <button onClick={() => { setDepartmentFilter(String(dept.id)); setStatusFilter('all'); setQuery(''); setTab('tasks'); }}
+                    style={{ background: '#263b5a', color: '#edf2fa', border: 0, borderRadius: 8, padding: 9, cursor: 'pointer' }}>
+                    عرض المهام
+                  </button>
+                  <button onClick={() => openEditor('department', dept)}
+                    style={{ background: '#222d3d', color: '#edf2fa', border: '1px solid #52627b', borderRadius: 8, padding: 9, cursor: 'pointer' }}>
+                    تعديل الإدارة
+                  </button>
+                </div>
               </article>
             )}
             {!departments.length && <div style={panel}>لا توجد إدارات في البيانات المسترجعة.</div>}
@@ -174,6 +228,10 @@ export default function OrganizationDashboard() {
           {selectedAgent && <section style={{ ...panel, marginTop: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
               <div><h2 style={{ margin: 0, fontSize: 20 }}>{selectedAgent.name}</h2><div style={muted}>{selectedAgent.role} · المعرّف #{selectedAgent.id}</div></div>
+              <button onClick={() => openEditor('agent', selectedAgent)}
+                style={{ background: '#263b5a', color: '#edf2fa', border: 0, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
+                تعديل بيانات الوكيل
+              </button>
               <span style={{ ...muted, alignSelf: 'center' }}>الحالة المسجلة: {selectedAgent.sourceStatus || 'غير محددة'}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 12 }}>
@@ -304,8 +362,42 @@ export default function OrganizationDashboard() {
           {!reviews.length && <div style={panel}>لا توجد مراجعات ضمن السجلات المسترجعة.</div>}
         </section>}
 
+        {editor && <div role="dialog" aria-modal="true" aria-labelledby="office-edit-title"
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.72)', display: 'grid', placeItems: 'center', padding: 14 }}>
+          <section style={{ ...panel, width: 'min(100%, 480px)', boxShadow: '0 20px 70px rgba(0,0,0,0.5)' }}>
+            <h2 id="office-edit-title" style={{ margin: '0 0 6px', fontSize: 19 }}>تعديل {editor.kind === 'agent' ? 'بيانات الوكيل' : 'بيانات الإدارة'}</h2>
+            <p style={muted}>#{editor.id} · {editor.title}. لا يمكن من هذه النافذة تغيير الصلاحيات أو المسؤولين أو تشغيل الوكلاء.</p>
+            <label style={{ display: 'grid', gap: 5, ...muted, marginTop: 12 }}>
+              {editor.kind === 'agent' ? 'اسم الوكيل' : 'اسم الإدارة'}
+              <input value={editName} maxLength={80} onChange={e => { setEditName(e.target.value); setConfirmSave(false); }} style={field} />
+            </label>
+            <label style={{ display: 'grid', gap: 5, ...muted, marginTop: 10 }}>
+              {editor.kind === 'agent' ? 'التخصص' : 'الوصف'}
+              <textarea value={editDetail} maxLength={editor.kind === 'agent' ? 200 : 500}
+                onChange={e => { setEditDetail(e.target.value); setConfirmSave(false); }}
+                style={{ ...field, minHeight: 90, resize: 'vertical' }} />
+            </label>
+            <label style={{ display: 'flex', gap: 9, alignItems: 'flex-start', marginTop: 13, color: '#e6edf8', fontSize: 13, lineHeight: 1.6 }}>
+              <input type="checkbox" checked={confirmSave} onChange={e => setConfirmSave(e.target.checked)} />
+              أؤكد حفظ هذه التغييرات في قاعدة بيانات المؤسسة، مع تسجيلها في سجل التدقيق.
+            </label>
+            {saveError && <div role="alert" style={{ color: '#ffb9b9', marginTop: 10, fontSize: 13 }}>{saveError}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button disabled={!confirmSave || saving || !editName.trim() || !editDetail.trim()}
+                onClick={saveProfile}
+                style={{ flex: 1, background: confirmSave ? '#285b43' : '#26313f', color: '#fff', border: 0, borderRadius: 8, padding: 10, opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'جارٍ الحفظ…' : 'تأكيد الحفظ'}
+              </button>
+              <button disabled={saving} onClick={() => setEditor(null)}
+                style={{ background: 'transparent', color: '#cbd5e1', border: '1px solid #52627b', borderRadius: 8, padding: '10px 14px' }}>
+                إلغاء
+              </button>
+            </div>
+          </section>
+        </div>}
+
         <footer style={{ ...muted, marginTop: 18, textAlign: 'center' }}>
-          آخر مزامنة: {date(data.timestamp || '')} · جميع البيانات للعرض فقط · لم تُنفّذ أي أوامر على الوكلاء
+          آخر مزامنة: {date(data.timestamp || '')} · التعديل محصور في الأسماء والأوصاف بموافقة صريحة · لا يوجد تشغيل للوكلاء أو تنفيذ للمهام
         </footer>
       </>}
     </div>
