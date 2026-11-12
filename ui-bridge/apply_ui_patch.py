@@ -11,9 +11,17 @@ PAGE = UI_ROOT / "app" / "page.tsx"
 ROUTE = UI_ROOT / "app" / "api" / "office" / "route.ts"
 ACTIONS_ROUTE = UI_ROOT / "app" / "api" / "office" / "actions" / "route.ts"
 INSTRUMENTATION = UI_ROOT / "instrumentation.ts"
+LEGACY_CONFIG = UI_ROOT / "app" / "api" / "office" / "config" / "route.ts"
+LEGACY_MEETING = UI_ROOT / "app" / "api" / "office" / "meeting" / "route.ts"
+LEGACY_AUTOWORK = UI_ROOT / "app" / "api" / "office" / "autowork" / "route.ts"
+LEGACY_CHAT = UI_ROOT / "app" / "api" / "office" / "chat" / "route.ts"
 ROUTE_SOURCE = REPO_ROOT / "ui-bridge" / "office-route.ts"
 ACTIONS_SOURCE = REPO_ROOT / "ui-bridge" / "actions-route.ts"
 INSTRUMENTATION_SOURCE = REPO_ROOT / "ui-bridge" / "instrumentation-safe.ts"
+LEGACY_CONFIG_SOURCE = REPO_ROOT / "ui-bridge" / "legacy-config-route.ts"
+LEGACY_MEETING_SOURCE = REPO_ROOT / "ui-bridge" / "legacy-meeting-route.ts"
+LEGACY_AUTOWORK_SOURCE = REPO_ROOT / "ui-bridge" / "legacy-autowork-route.ts"
+LEGACY_CHAT_SOURCE = REPO_ROOT / "ui-bridge" / "legacy-chat-route.ts"
 ENV_FILE = UI_ROOT / ".env.local"
 
 OLD = """              needs: defaults.needs,
@@ -92,7 +100,7 @@ def configure_env():
 
 
 def main():
-    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION)):
+    if not all(path.is_file() for path in (PAGE, ROUTE_SOURCE, ACTIONS_SOURCE, INSTRUMENTATION_SOURCE, INSTRUMENTATION, LEGACY_CONFIG_SOURCE, LEGACY_MEETING_SOURCE, LEGACY_AUTOWORK_SOURCE, LEGACY_CHAT_SOURCE)):
         raise SystemExit("Required file missing. Expected ~/openclawfice and both bridge route sources.")
     page_text = PAGE.read_text(encoding="utf-8")
 
@@ -138,6 +146,10 @@ def main():
         (ROUTE, "office-route.ts"),
         (ACTIONS_ROUTE, "actions-route.ts"),
         (INSTRUMENTATION, "instrumentation.ts"),
+        (LEGACY_CONFIG, "legacy-config-route.ts"),
+        (LEGACY_MEETING, "legacy-meeting-route.ts"),
+        (LEGACY_AUTOWORK, "legacy-autowork-route.ts"),
+        (LEGACY_CHAT, "legacy-chat-route.ts"),
         (ENV_FILE, ".env.local"),
     ):
         if path.exists():
@@ -152,6 +164,10 @@ def main():
         (ROUTE, ROUTE_SOURCE, "office-route.ts"),
         (ACTIONS_ROUTE, ACTIONS_SOURCE, "actions-route.ts"),
         (INSTRUMENTATION, INSTRUMENTATION_SOURCE, "instrumentation.ts"),
+        (LEGACY_CONFIG, LEGACY_CONFIG_SOURCE, "legacy-config-route.ts"),
+        (LEGACY_MEETING, LEGACY_MEETING_SOURCE, "legacy-meeting-route.ts"),
+        (LEGACY_AUTOWORK, LEGACY_AUTOWORK_SOURCE, "legacy-autowork-route.ts"),
+        (LEGACY_CHAT, LEGACY_CHAT_SOURCE, "legacy-chat-route.ts"),
     ):
         temp = target.with_name(target.name + ".office-ui-bridge.tmp")
         shutil.copy2(source, temp)
@@ -163,6 +179,7 @@ def main():
     print("Quest Log displays only approvals whose database status is pending.")
     print("Approval decisions remain disabled; no database or engine files were changed.")
     print("Legacy OpenClaw autowork and watercooler background tickers are disabled.")
+    print("Legacy config, meeting, autowork, and chat write endpoints return HTTP 405.")
     print("The local bridge secret remains in .env.local and was not displayed.")
 
 
