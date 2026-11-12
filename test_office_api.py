@@ -36,11 +36,12 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             INSERT INTO agent_departments VALUES (2, 2, 1, 'manager', 'active', 'now');
             INSERT INTO reporting_lines VALUES (1, 1, 2, 1, 'reports_to', 'now');
             INSERT INTO reporting_lines VALUES (2, 2, 3, 1, 'reports_to', 'now');
-            CREATE TABLE tasks (id INTEGER, title TEXT, description TEXT, assigned_to INTEGER, status TEXT,
+            CREATE TABLE tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, description TEXT, assigned_to INTEGER, status TEXT,
                 created_at TEXT, department_id INTEGER, parent_id INTEGER, result TEXT, score REAL,
                 priority TEXT, updated_at TEXT, dept_hint TEXT);
             INSERT INTO tasks VALUES (7, 'Test task', 'Task description', 1, 'assigned', 'now',
                 1, NULL, '', NULL, 'high', 'now', '');
+            CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, sender INTEGER, recipient INTEGER, task_id INTEGER, kind TEXT, body TEXT, is_read INTEGER DEFAULT 0);
             CREATE TABLE approvals (id INTEGER, ts TEXT, kind TEXT, payload TEXT,
                 status TEXT DEFAULT 'pending', decided_at TEXT, note TEXT);
             INSERT INTO approvals VALUES (1, '2026-11-12T00:00:00', 'create_agent',
@@ -211,6 +212,83 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             office_api.update_profile({"operation": "agent_profile", "id": 1, "name": "New name", "role": "CEO"})
         with self.assertRaises(LookupError):
             office_api.update_profile({"operation": "agent_profile", "id": 999, "name": "Missing"})
+
+    def test_owner_confirmed_task_creation_is_unassigned_and_audited(self):
+        result = office_api.update_profile({
+            "operation": "task_create", "confirm": True,
+            "title": "Prepare quarterly report", "description": "Collect and summarize results",
+            "department_id": 2, "priority": "high",
+        })
+        self.assertEqual(result["operation"], "task_create")
+        with office_api.connect_readonly() as conn:
+            row = conn.execute(
+                "SELECT title,description,assigned_to,status,department_id,priority FROM tasks WHERE id=?",
+                (result["id"],),
+            ).fetchone()
+            self.assertEqual(tuple(row), (
+                "Prepare quarterly report", "Collect and summarize results", None, "pending", 2, "high",
+            ))
+            audit = conn.execute("SELECT actor,action FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+            self.assertEqual(tuple(audit), ("owner", "task_created"))
+
+    def test_owner_task_assignment_notifies_agent_and_can_be_unassigned(self):
+        result = office_api.update_profile({
+            "operation": "task_assign", "id": 7, "assigned_to": 2, "confirm": True,
+        })
+        self.assertEqual(result["status"], "assigned")
+        with office_api.connect_readonly() as conn:
+            task = conn.execute("SELECT assigned_to,status FROM tasks WHERE id=7").fetchone()
+            self.assertEqual(tuple(task), (2, "assigned"))
+            message = conn.execute(
+                "SELECT recipient,task_id,kind,body FROM messages ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            self.assertEqual(tuple(message[:3]), (2, 7, "task"))
+            self.assertIn("Test task", message["body"])
+            audit = conn.execute("SELECT actor,action FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+            self.assertEqual(tuple(audit), ("owner", "task_assigned"))
+
+        result = office_api.update_profile({
+            "operation": "task_assign", "id": 7, "assigned_to": None, "confirm": True,
+        })
+        self.assertEqual(result["status"], "pending")
+        with office_api.connect_readonly() as conn:
+            task = conn.execute("SELECT assigned_to,status FROM tasks WHERE id=7").fetchone()
+            self.assertEqual(tuple(task), (None, "pending"))
+            audit = conn.execute("SELECT action FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+            self.assertEqual(audit["action"], "task_unassigned")
+
+    def test_task_management_rejects_invalid_agents_locked_tasks_and_unknown_fields(self):
+        with self.assertRaisesRegex(LookupError, "assignee_not_found"):
+            office_api.update_profile({
+                "operation": "task_assign", "id": 7, "assigned_to": 999, "confirm": True,
+            })
+        with office_api.connect_writable() as conn:
+            conn.execute("UPDATE tasks SET status='done' WHERE id=7")
+            conn.commit()
+        with self.assertRaisesRegex(ValueError, "task_locked"):
+            office_api.update_profile({
+                "operation": "task_assign", "id": 7, "assigned_to": 2, "confirm": True,
+            })
+        with self.assertRaisesRegex(ValueError, "unsupported_fields"):
+            office_api.update_profile({
+                "operation": "task_create", "title": "Unsafe", "assigned_to": 2, "confirm": True,
+            })
+        with self.assertRaisesRegex(ValueError, "invalid_priority"):
+            office_api.update_profile({
+                "operation": "task_create", "title": "Bad priority", "priority": "execute", "confirm": True,
+            })
+
+    def test_task_page_exposes_confirmed_create_and_assignment_without_run_controls(self):
+        page = (Path(__file__).parent / "ui-bridge" / "tasks-page.tsx").read_text(encoding="utf-8")
+        self.assertIn("operation: 'task_create'", page)
+        self.assertIn("operation: 'task_assign'", page)
+        self.assertIn("confirm: true", page)
+        self.assertIn("task_locked", page)
+        self.assertNotIn("agent_run", page)
+        self.assertNotIn("resume_orphans", page)
+        installer = (Path(__file__).parent / "ui-bridge" / "apply_ui_patch.py").read_text(encoding="utf-8")
+        self.assertIn("TASK_PAGE_SOURCE", installer)
+        self.assertIn("http://localhost:3333/tasks", installer)
 
     def test_database_connection_is_read_only(self):
         with office_api.connect_readonly() as conn:
