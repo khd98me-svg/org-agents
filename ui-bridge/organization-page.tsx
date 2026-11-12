@@ -39,6 +39,7 @@ export default function OrganizationDashboard() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -64,8 +65,11 @@ export default function OrganizationDashboard() {
   const runs = data?.runs || [];
   const reviews = data?.reviews || [];
   const departments = data?.departments || [];
+  const agents = data?.agents || [];
+  const selectedAgent = agents.find(agent => String(agent.id) === selectedAgentId) || null;
   const tabs = [
     ['departments', 'الإدارات', departments.length],
+    ['agents', 'الوكلاء', agents.length],
     ['tasks', 'المهام', summary.tasks ?? tasks.length],
     ['runs', 'التشغيلات', runs.length],
     ['reviews', 'المراجعات', reviews.length],
@@ -153,6 +157,48 @@ export default function OrganizationDashboard() {
             )}
             {!departments.length && <div style={panel}>لا توجد إدارات في البيانات المسترجعة.</div>}
           </section>
+        </>}
+
+        {tab === 'agents' && <>
+          <div style={{ ...muted, marginBottom: 10 }}>اختر وكيلاً لعرض ملفه التنظيمي وسجل عمله. هذه البيانات مسترجعة من قاعدة المؤسسة ولا تتضمن أي أوامر تشغيل أو تعديل.</div>
+          <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))', gap: 9 }}>
+            {agents.map(agent => <button key={agent.id} onClick={() => setSelectedAgentId(String(agent.id))}
+              aria-pressed={selectedAgentId === String(agent.id)}
+              style={{ ...panel, textAlign: 'right', color: '#edf2fa', cursor: 'pointer', borderColor: selectedAgentId === String(agent.id) ? '#7799ce' : '#30394b' }}>
+              <strong>{agent.emoji || '🤖'} {agent.name}</strong>
+              <div style={{ ...muted, marginTop: 6 }}>{agent.role || 'دون تخصص مسجل'} · {agent.status === 'working' ? 'نشاط حديث مسجل' : 'لا يوجد نشاط حديث مثبت'}</div>
+              <div style={{ ...muted, marginTop: 5 }}>المهام: {agent.tasks?.length || 0} · التشغيلات: {agent.runs?.length || 0} · الإدارات: {agent.departments?.length || 0}</div>
+            </button>)}
+          </section>
+          {!agents.length && <div style={panel}>لا يوجد وكلاء في البيانات المسترجعة.</div>}
+          {selectedAgent && <section style={{ ...panel, marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <div><h2 style={{ margin: 0, fontSize: 20 }}>{selectedAgent.name}</h2><div style={muted}>{selectedAgent.role} · المعرّف #{selectedAgent.id}</div></div>
+              <span style={{ ...muted, alignSelf: 'center' }}>الحالة المسجلة: {selectedAgent.sourceStatus || 'غير محددة'}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 12 }}>
+              {[['المهام المسندة', selectedAgent.tasks?.length], ['التشغيلات', selectedAgent.runs?.length], ['المراجعات', selectedAgent.reviews?.length], ['الإدارات', selectedAgent.departments?.length]].map(([name, count]) =>
+                <div key={String(name)} style={{ background: '#101722', borderRadius: 8, padding: 10 }}><div style={muted}>{name}</div><strong>{count ?? 0}</strong></div>
+              )}
+            </div>
+            <div style={{ marginTop: 14 }}><strong>الانتماء الإداري</strong>
+              <p style={muted}>{selectedAgent.departments?.length ? selectedAgent.departments.map((d: Item) => d.name + ' · ' + d.role).join('، ') : 'لا يوجد ارتباط إداري نشط مسجل'}</p>
+            </div>
+            <div style={{ marginTop: 14 }}><strong>التسلسل الإداري</strong>
+              <p style={muted}>يرفع تقاريره إلى: {selectedAgent.reportsTo?.length ? selectedAgent.reportsTo.map((x: Item) => x.managerName).join('، ') : 'غير محدد'}</p>
+              <p style={muted}>يتبعه: {selectedAgent.directReports?.length ? selectedAgent.directReports.map((x: Item) => x.agentName).join('، ') : 'لا توجد تقارير مباشرة مسجلة'}</p>
+            </div>
+            <div style={{ marginTop: 14 }}><strong>المهام المسندة</strong>
+              {selectedAgent.tasks?.length ? selectedAgent.tasks.map((task: Item) => <div key={task.id} style={{ background: '#101722', borderRadius: 8, padding: 9, marginTop: 7 }}>#{task.id} · {task.title}<div style={muted}>{label(task.status)} · {task.priority} · {date(task.updatedAt)}</div></div>) : <p style={muted}>لا توجد مهام مسندة مسجلة.</p>}
+            </div>
+            <div style={{ marginTop: 14 }}><strong>سجل التشغيلات</strong>
+              {selectedAgent.runs?.length ? selectedAgent.runs.map((run: Item) => <div key={run.id} style={{ background: '#101722', borderRadius: 8, padding: 9, marginTop: 7 }}>تشغيل #{run.id} · المهمة #{run.taskId || '—'} · {label(run.status)}<div style={muted}>الخطوات: {run.steps} · {date(run.updatedAt || run.createdAt)}</div></div>) : <p style={muted}>لا توجد تشغيلات مسجلة لهذا الوكيل.</p>}
+            </div>
+            <div style={{ marginTop: 14 }}><strong>المراجعات التي أجراها</strong>
+              {selectedAgent.reviews?.length ? selectedAgent.reviews.map((review: Item) => <div key={review.id} style={{ background: '#101722', borderRadius: 8, padding: 9, marginTop: 7 }}>مراجعة #{review.id} · المهمة #{review.taskId || '—'} · {review.verdict} · {review.score ?? '—'}<div style={muted}>{date(review.ts)}</div>{review.notes && <p style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{review.notes}</p>}</div>) : <p style={muted}>لا توجد مراجعات مسجلة باسم معرّف هذا الوكيل.</p>}
+            </div>
+            <div style={{ ...muted, marginTop: 14 }}>ملف للعرض فقط. لا توجد أزرار لتعديل الوكيل أو تشغيله أو إيقافه في هذه المرحلة.</div>
+          </section>}
         </>}
 
         {tab === 'tasks' && <>
