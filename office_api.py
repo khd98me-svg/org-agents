@@ -130,67 +130,255 @@ def connect_writable():
     return conn
 
 
+def _positive_id(value, field, nullable=False):
+    if nullable and value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError("invalid_" + field)
+    return value
+
+
+def _agent_exists(conn, agent_id, field="agent"):
+    row = conn.execute("SELECT status FROM agents WHERE id=?", (agent_id,)).fetchone()
+    if not row:
+        raise LookupError(field + "_not_found")
+    if row["status"] != "active":
+        raise ValueError(field + "_inactive")
+
+
+def _would_create_agent_cycle(conn, agent_id, manager_id):
+    if manager_id is None:
+        return False
+    row = conn.execute(
+        """WITH RECURSIVE chain(id) AS (
+             SELECT ?
+             UNION
+             SELECT a.manager_id FROM agents a JOIN chain c ON a.id=c.id
+             WHERE a.manager_id IS NOT NULL
+           )
+           SELECT 1 FROM chain WHERE id=? LIMIT 1""",
+        (manager_id, agent_id),
+    ).fetchone()
+    return row is not None
+
+
+def _would_create_department_cycle(conn, department_id, parent_id):
+    if parent_id is None:
+        return False
+    row = conn.execute(
+        """WITH RECURSIVE chain(id) AS (
+             SELECT ?
+             UNION
+             SELECT d.parent_department_id FROM departments d JOIN chain c ON d.id=c.id
+             WHERE d.parent_department_id IS NOT NULL
+           )
+           SELECT 1 FROM chain WHERE id=? LIMIT 1""",
+        (parent_id, department_id),
+    ).fetchone()
+    return row is not None
+
+
 def update_profile(payload):
-    """Update only agent name/specialty or department name/description."""
+    """Apply narrowly allowlisted, owner-confirmed profile or hierarchy changes."""
     if not isinstance(payload, dict):
         raise ValueError("invalid_payload")
     operation = payload.get("operation")
-    entity_id = payload.get("id")
-    if isinstance(entity_id, bool) or not isinstance(entity_id, int) or entity_id < 1:
-        raise ValueError("invalid_id")
+    entity_id = _positive_id(payload.get("id"), "id")
 
-    limits = {
+    profile_limits = {
         "agent_profile": {"name": 80, "specialty": 200},
         "department_profile": {"name": 80, "description": 500},
     }
-    if operation not in limits:
+    hierarchy_allowed = {
+        "agent_hierarchy": {"manager_id", "department_ids"},
+        "department_hierarchy": {"parent_department_id"},
+    }
+    if operation not in profile_limits and operation not in hierarchy_allowed:
         raise ValueError("unsupported_operation")
-    fields = limits[operation]
-    allowed = {"operation", "id", "confirm"} | set(fields)
+
+    if operation in profile_limits:
+        fields = profile_limits[operation]
+        allowed = {"operation", "id", "confirm"} | set(fields)
+        if set(payload) - allowed:
+            raise ValueError("unsupported_fields")
+        values = {}
+        for key, maximum in fields.items():
+            if key in payload:
+                value = payload[key]
+                if not isinstance(value, str):
+                    raise ValueError("invalid_" + key)
+                value = value.strip()
+                if not value or len(value) > maximum:
+                    raise ValueError("invalid_" + key)
+                values[key] = value
+        if not values:
+            raise ValueError("no_changes")
+
+        table = "agents" if operation == "agent_profile" else "departments"
+        with closing(connect_writable()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            exists = conn.execute("SELECT 1 FROM " + table + " WHERE id=?", (entity_id,)).fetchone()
+            if not exists:
+                raise LookupError("not_found")
+            if operation == "agent_profile":
+                if "name" in values:
+                    conn.execute("UPDATE agents SET name=? WHERE id=?", (values["name"], entity_id))
+                if "specialty" in values:
+                    conn.execute("UPDATE agents SET specialty=? WHERE id=?", (values["specialty"], entity_id))
+            else:
+                if "name" in values:
+                    duplicate = conn.execute("SELECT 1 FROM departments WHERE name=? AND id<>?",
+                                             (values["name"], entity_id)).fetchone()
+                    if duplicate:
+                        raise ValueError("department_name_exists")
+                    conn.execute("UPDATE departments SET name=? WHERE id=?", (values["name"], entity_id))
+                if "description" in values:
+                    conn.execute("UPDATE departments SET description=? WHERE id=?", (values["description"], entity_id))
+            if not table_exists(conn, "audit"):
+                raise RuntimeError("audit_table_missing")
+            conn.execute(
+                "INSERT INTO audit(actor,action,details,created_at) VALUES(?,?,?,datetime('now'))",
+                ("owner", operation + "_updated",
+                 "id=%d fields=%s" % (entity_id, ",".join(sorted(values)))),
+            )
+            conn.commit()
+        return {"ok": True, "operation": operation, "id": entity_id, "updated_fields": sorted(values)}
+
+    allowed = {"operation", "id", "confirm"} | hierarchy_allowed[operation]
     if set(payload) - allowed:
         raise ValueError("unsupported_fields")
-    values = {}
-    for key, maximum in fields.items():
-        if key in payload:
-            value = payload[key]
-            if not isinstance(value, str):
-                raise ValueError("invalid_" + key)
-            value = value.strip()
-            if not value or len(value) > maximum:
-                raise ValueError("invalid_" + key)
-            values[key] = value
-    if not values:
-        raise ValueError("no_changes")
 
-    table = "agents" if operation == "agent_profile" else "departments"
     with closing(connect_writable()) as conn:
+        conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("BEGIN IMMEDIATE")
-        exists = conn.execute("SELECT 1 FROM " + table + " WHERE id=?", (entity_id,)).fetchone()
-        if not exists:
-            raise LookupError("not_found")
-        if operation == "agent_profile":
-            if "name" in values:
-                conn.execute("UPDATE agents SET name=? WHERE id=?", (values["name"], entity_id))
-            if "specialty" in values:
-                conn.execute("UPDATE agents SET specialty=? WHERE id=?", (values["specialty"], entity_id))
-        else:
-            if "name" in values:
-                duplicate = conn.execute("SELECT 1 FROM departments WHERE name=? AND id<>?",
-                                         (values["name"], entity_id)).fetchone()
-                if duplicate:
-                    raise ValueError("department_name_exists")
-                conn.execute("UPDATE departments SET name=? WHERE id=?", (values["name"], entity_id))
-            if "description" in values:
-                conn.execute("UPDATE departments SET description=? WHERE id=?", (values["description"], entity_id))
         if not table_exists(conn, "audit"):
             raise RuntimeError("audit_table_missing")
+
+        if operation == "agent_hierarchy":
+            if not table_exists(conn, "agent_departments") or not table_exists(conn, "reporting_lines"):
+                raise RuntimeError("organization_relations_missing")
+            if not conn.execute("SELECT 1 FROM agents WHERE id=?", (entity_id,)).fetchone():
+                raise LookupError("agent_not_found")
+
+            old_manager = conn.execute("SELECT manager_id FROM agents WHERE id=?", (entity_id,)).fetchone()["manager_id"]
+            new_manager = old_manager
+            if "manager_id" in payload:
+                new_manager = _positive_id(payload["manager_id"], "manager_id", nullable=True)
+                if new_manager is not None:
+                    if new_manager == entity_id:
+                        raise ValueError("agent_cannot_manage_itself")
+                    _agent_exists(conn, new_manager, "manager")
+                    if _would_create_agent_cycle(conn, entity_id, new_manager):
+                        raise ValueError("agent_reporting_cycle")
+
+            old_departments = [row["department_id"] for row in conn.execute(
+                "SELECT department_id FROM agent_departments WHERE agent_id=? AND status='active' ORDER BY department_id",
+                (entity_id,),
+            ).fetchall()]
+            new_departments = old_departments
+            if "department_ids" in payload:
+                raw_ids = payload["department_ids"]
+                if not isinstance(raw_ids, list):
+                    raise ValueError("invalid_department_ids")
+                new_departments = []
+                for value in raw_ids:
+                    did = _positive_id(value, "department_id")
+                    if did in new_departments:
+                        raise ValueError("duplicate_department_id")
+                    new_departments.append(did)
+                new_departments.sort()
+                if new_departments:
+                    placeholders = ",".join("?" for _ in new_departments)
+                    found = {row["id"] for row in conn.execute(
+                        "SELECT id FROM departments WHERE status='active' AND id IN (" + placeholders + ")",
+                        tuple(new_departments),
+                    ).fetchall()}
+                    if found != set(new_departments):
+                        raise ValueError("department_not_found_or_inactive")
+                removed = set(old_departments) - set(new_departments)
+                for did in removed:
+                    is_manager = conn.execute(
+                        "SELECT 1 FROM departments WHERE id=? AND manager_agent_id=?",
+                        (did, entity_id),
+                    ).fetchone()
+                    if is_manager:
+                        raise ValueError("cannot_remove_department_manager")
+
+            if "manager_id" in payload:
+                conn.execute("UPDATE agents SET manager_id=? WHERE id=?", (new_manager, entity_id))
+
+            if "department_ids" in payload:
+                conn.execute(
+                    "UPDATE agent_departments SET status='inactive' WHERE agent_id=? AND status='active'",
+                    (entity_id,),
+                )
+                for did in new_departments:
+                    conn.execute(
+                        """INSERT INTO agent_departments(agent_id,department_id,role,status)
+                           VALUES(?,?,'member','active')
+                           ON CONFLICT(agent_id,department_id) DO UPDATE SET status='active'""",
+                        (entity_id, did),
+                    )
+
+            if "manager_id" in payload or "department_ids" in payload:
+                conn.execute("DELETE FROM reporting_lines WHERE subordinate_agent_id=?", (entity_id,))
+                if new_manager is not None:
+                    for did in new_departments:
+                        conn.execute(
+                            """INSERT OR IGNORE INTO reporting_lines
+                               (manager_agent_id,subordinate_agent_id,department_id,relation)
+                               VALUES(?,?,?,'reports_to')""",
+                            (new_manager, entity_id, did),
+                        )
+
+            changed = []
+            if "manager_id" in payload and new_manager != old_manager:
+                changed.append("manager_id:%s->%s" % (old_manager, new_manager))
+            if "department_ids" in payload and new_departments != old_departments:
+                changed.append("departments:%s->%s" % (
+                    ",".join(map(str, old_departments)), ",".join(map(str, new_departments))
+                ))
+            if not changed:
+                raise ValueError("no_changes")
+            action = "agent_hierarchy_updated"
+            details = "agent=%d %s" % (entity_id, " ".join(changed))
+
+        else:
+            if not table_exists(conn, "departments"):
+                raise RuntimeError("departments_table_missing")
+            row = conn.execute(
+                "SELECT parent_department_id FROM departments WHERE id=?", (entity_id,)
+            ).fetchone()
+            if not row:
+                raise LookupError("department_not_found")
+            new_parent = _positive_id(payload.get("parent_department_id"), "parent_department_id", nullable=True)
+            if new_parent is not None:
+                if new_parent == entity_id:
+                    raise ValueError("department_cannot_parent_itself")
+                parent = conn.execute(
+                    "SELECT status FROM departments WHERE id=?", (new_parent,)
+                ).fetchone()
+                if not parent or parent["status"] != "active":
+                    raise ValueError("parent_department_not_found_or_inactive")
+                if _would_create_department_cycle(conn, entity_id, new_parent):
+                    raise ValueError("department_hierarchy_cycle")
+            old_parent = row["parent_department_id"]
+            if new_parent == old_parent:
+                raise ValueError("no_changes")
+            conn.execute(
+                "UPDATE departments SET parent_department_id=? WHERE id=?",
+                (new_parent, entity_id),
+            )
+            action = "department_hierarchy_updated"
+            details = "department=%d parent:%s->%s" % (entity_id, old_parent, new_parent)
+
         conn.execute(
-            "INSERT INTO audit(actor,action,details,created_at) VALUES(?,?,?,datetime('now'))",
-            ("owner", operation + "_updated",
-             "id=%d fields=%s" % (entity_id, ",".join(sorted(values)))),
+            "INSERT INTO audit(actor,action,details,created_at) VALUES('owner',?,?,datetime('now'))",
+            (action, details[:500]),
         )
         conn.commit()
-    return {"ok": True, "operation": operation, "id": entity_id, "updated_fields": sorted(values)}
+
+    return {"ok": True, "operation": operation, "id": entity_id, "details": details}
 
 
 class Handler(BaseHTTPRequestHandler):
