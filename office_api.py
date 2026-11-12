@@ -249,7 +249,7 @@ def manage_task(payload):
             if agent_id is not None:
                 if not table_exists(conn, "messages"):
                     raise RuntimeError("messages_table_missing")
-                body = "مهمة جديدة #%d: %s\\n%s" % (task_id, task["title"], task["description"] or "")
+                body = "مهمة جديدة #%d: %s\n%s" % (task_id, task["title"], task["description"] or "")
                 conn.execute(
                     "INSERT INTO messages(ts,sender,recipient,task_id,kind,body,is_read) VALUES(datetime('now'),NULL,?,?,'task',?,0)",
                     (agent_id, task_id, body[:2000]),
@@ -537,8 +537,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             result = update_profile(payload)
             self.send_json(200, result)
-        except LookupError:
-            self.send_json(404, {"ok": False, "error": "not_found"})
+        except LookupError as exc:
+            self.send_json(404, {"ok": False, "error": str(exc) or "not_found"})
         except ValueError as exc:
             self.send_json(400, {"ok": False, "error": str(exc)})
         except sqlite3.IntegrityError:
