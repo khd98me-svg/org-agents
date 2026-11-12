@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const upstream = await fetch(bridgeUrl.replace(/\\/$/, '') + '/manage', {
+    const upstream = await fetch(bridgeUrl.replace(/\/$/, '') + '/manage', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${bridgeToken}`,
