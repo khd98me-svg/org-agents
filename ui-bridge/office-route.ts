@@ -191,14 +191,7 @@ export async function GET(request: Request) {
     }));
 
     // Water Cooler is a conversation view, not a task-lifecycle feed.
-    // The organization engine records task/report/review events in the same
-    // messages table; only ordinary direct messages (kind='msg') belong here.
-    const agentNames = new Map(
-      (tables.agents || []).map(agent => [
-        String(agent.id),
-        String(agent.name || `Agent ${agent.id}`),
-      ]),
-    );
+    // Reuse agentNames created above for department/task labels as well.
     const chatLog = [
       ...(tables.ceo_chat || []).map(item => ({
         from: String(item.role || 'CEO'),
