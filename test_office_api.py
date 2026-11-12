@@ -24,6 +24,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             CREATE TABLE departments (id INTEGER, name TEXT, description TEXT, parent_department_id INTEGER,
                 manager_agent_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO departments VALUES (1, 'Strategy', 'Planning', NULL, 1, 'active', 'now');
+            INSERT INTO departments VALUES (2, 'Operations', 'Delivery', NULL, NULL, 'active', 'now');
             CREATE TABLE agent_departments (id INTEGER, agent_id INTEGER, department_id INTEGER, role TEXT,
                 status TEXT, assigned_at TEXT);
             INSERT INTO agent_departments VALUES (1, 1, 1, 'manager', 'active', 'now');
@@ -150,10 +151,12 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             self.assertEqual(tuple(row), ("New Strategy", "Updated description", 1))
         with self.assertRaises(ValueError):
             office_api.update_profile({"operation": "department_profile", "id": 1, "manager_agent_id": 99})
+        with self.assertRaises(ValueError):
+            office_api.update_profile({"operation": "department_profile", "id": 1, "name": "Operations"})
 
     def test_profile_updates_reject_unknown_fields_and_missing_entities(self):
         with self.assertRaises(ValueError):
-            office_api.update_profile({"operation": "agent_profile", "id": 1, "role": "CEO"})
+            office_api.update_profile({"operation": "agent_profile", "id": 1, "name": "New name", "role": "CEO"})
         with self.assertRaises(LookupError):
             office_api.update_profile({"operation": "agent_profile", "id": 999, "name": "Missing"})
 
