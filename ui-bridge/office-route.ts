@@ -124,7 +124,10 @@ export async function GET(request: Request) {
       });
       const ownTasks = rawTasks.filter(task => String(task.assigned_to ?? '') === id);
       const ownRuns = rawRuns.filter(run => String(run.agent_id ?? '') === id);
-      const ownReviews = rawReviews.filter(review => String(review.reviewer ?? '') === id);
+      const ownReviews = rawReviews.filter(review => {
+        const reviewer = String(review.reviewer ?? '').trim();
+        return reviewer === id || reviewer === String(agent.name || '').trim();
+      });
       const reportsTo = rawReporting.filter(line => String(line.subordinate_agent_id) === id).map(line => ({
         managerId: String(line.manager_agent_id),
         managerName: agentNames.get(String(line.manager_agent_id)) || ('Agent #' + line.manager_agent_id),
