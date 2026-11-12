@@ -133,6 +133,24 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("MANAGE_ROUTE", installer)
 
 
+    def test_agent_and_department_directories_show_searchable_hierarchy_context(self):
+        root = Path(__file__).parent
+        route = (root / "ui-bridge" / "office-route.ts").read_text(encoding="utf-8")
+        dashboard = (root / "ui-bridge" / "organization-page.tsx").read_text(encoding="utf-8")
+        self.assertIn("const managerRecord = agent.manager_id == null ? null", route)
+        self.assertIn("managerRecord, departments: memberships", route)
+        self.assertIn("parent: dept.parent_department_id == null ? null", route)
+        self.assertIn("departmentQuery", dashboard)
+        self.assertIn("agentQuery", dashboard)
+        self.assertIn("filteredDepartments.map", dashboard)
+        self.assertIn("filteredAgents.map", dashboard)
+        self.assertIn("الإدارة الأعلى:", dashboard)
+        self.assertIn("المدير المسجل في ملف الوكيل:", dashboard)
+        self.assertIn("دور العضوية:", dashboard)
+        self.assertIn("لا تعرض مصفوفة صلاحيات تقنية مستقلة", dashboard)
+        self.assertNotIn("manager_agent_id: payload", route)
+        self.assertNotIn("method: 'POST'", route)
+
     def test_audit_log_is_enriched_and_filterable_without_write_controls(self):
         root = Path(__file__).parent
         route = (root / "ui-bridge" / "office-route.ts").read_text(encoding="utf-8")
