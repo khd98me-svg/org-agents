@@ -43,6 +43,7 @@ export default function OrganizationDashboard() {
   const [departmentQuery, setDepartmentQuery] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [editor, setEditor] = useState<{ kind: 'agent' | 'department'; id: string; title: string; originalName: string; originalDetail: string } | null>(null);
+  const [hierarchyEditor, setHierarchyEditor] = useState<{ kind: 'agent' | 'department'; id: string; title: string; managerId: string; departmentIds: string[]; parentId: string } | null>(null);
   const [editName, setEditName] = useState('');
   const [editDetail, setEditDetail] = useState('');
   const [confirmSave, setConfirmSave] = useState(false);
@@ -79,6 +80,68 @@ export default function OrganizationDashboard() {
     setSaveError('');
     setSaveNotice('');
   };
+
+  const openHierarchyEditor = (kind: 'agent' | 'department', item: Item) => {
+    setHierarchyEditor({
+      kind, id: String(item.id), title: String(item.name || ''),
+      managerId: kind === 'agent' ? String(item.managerRecord?.id || '') : '',
+      departmentIds: kind === 'agent' ? (item.departments || []).map((dept: Item) => String(dept.id)) : [],
+      parentId: kind === 'department' ? String(item.parentId || '') : '',
+    });
+    setConfirmSave(false);
+    setSaveError('');
+    setSaveNotice('');
+  };
+
+  const saveHierarchy = useCallback(async () => {
+    if (!hierarchyEditor || !confirmSave) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      const payload: Item = hierarchyEditor.kind === 'agent'
+        ? {
+            operation: 'agent_hierarchy',
+            id: Number(hierarchyEditor.id),
+            manager_id: hierarchyEditor.managerId ? Number(hierarchyEditor.managerId) : null,
+            department_ids: hierarchyEditor.departmentIds.map(Number),
+            confirm: true,
+          }
+        : {
+            operation: 'department_hierarchy',
+            id: Number(hierarchyEditor.id),
+            parent_department_id: hierarchyEditor.parentId ? Number(hierarchyEditor.parentId) : null,
+            confirm: true,
+          };
+      const res = await authFetch('/api/office/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        const messages: Record<string, string> = {
+          agent_reporting_cycle: 'هذا التعيين ينشئ حلقة في التسلسل الإداري.',
+          agent_cannot_manage_itself: 'لا يمكن تعيين الوكيل مديراً لنفسه.',
+          department_hierarchy_cycle: 'هذا التعيين ينشئ حلقة في تسلسل الإدارات.',
+          department_cannot_parent_itself: 'لا يمكن جعل الإدارة تابعة لنفسها.',
+          cannot_remove_department_manager: 'لا يمكن إخراج مدير الإدارة من عضويتها قبل تغيير مدير الإدارة.',
+          department_not_found_or_inactive: 'إحدى الإدارات المختارة غير موجودة أو غير نشطة.',
+          parent_department_not_found_or_inactive: 'الإدارة الأعلى المختارة غير موجودة أو غير نشطة.',
+          no_changes: 'لم يتغير أي شيء.',
+        };
+        throw new Error(messages[body.error] || body.error || ('HTTP ' + res.status));
+      }
+      setHierarchyEditor(null);
+      setConfirmSave(false);
+      setSaveNotice('تم تحديث الهيكل الإداري وتسجيل التغيير في سجل التدقيق.');
+      await load();
+    } catch (e: any) {
+      setSaveError(e?.message || 'تعذر حفظ الهيكل الإداري');
+    } finally {
+      setSaving(false);
+    }
+  }, [authFetch, hierarchyEditor, confirmSave, load]);
 
   const saveProfile = useCallback(async () => {
     if (!editor || !confirmSave) return;
@@ -267,10 +330,14 @@ export default function OrganizationDashboard() {
                     <span key={m.id} style={{ background: '#222d3d', padding: '5px 8px', borderRadius: 6, fontSize: 12 }}>{m.name} · {m.role}</span>
                   )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, marginTop: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 7, marginTop: 12 }}>
                   <button onClick={() => { setDepartmentFilter(String(dept.id)); setStatusFilter('all'); setQuery(''); setTab('tasks'); }}
                     style={{ background: '#263b5a', color: '#edf2fa', border: 0, borderRadius: 8, padding: 9, cursor: 'pointer' }}>
                     عرض المهام
+                  </button>
+                  <button onClick={() => openHierarchyEditor('department', dept)}
+                    style={{ background: '#222d3d', color: '#edf2fa', border: '1px solid #52627b', borderRadius: 8, padding: 9, cursor: 'pointer' }}>
+                    تعديل الإدارة الأعلى
                   </button>
                   <button onClick={() => openEditor('department', dept)}
                     style={{ background: '#222d3d', color: '#edf2fa', border: '1px solid #52627b', borderRadius: 8, padding: 9, cursor: 'pointer' }}>
@@ -301,10 +368,16 @@ export default function OrganizationDashboard() {
           {selectedAgent && <section style={{ ...panel, marginTop: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
               <div><h2 style={{ margin: 0, fontSize: 20 }}>{selectedAgent.name}</h2><div style={muted}>{selectedAgent.role} · المعرّف #{selectedAgent.id}</div></div>
+              <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              <button onClick={() => openHierarchyEditor('agent', selectedAgent)}
+                style={{ background: '#285b43', color: '#edf2fa', border: 0, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
+                تعديل المدير والإدارات
+              </button>
               <button onClick={() => openEditor('agent', selectedAgent)}
                 style={{ background: '#263b5a', color: '#edf2fa', border: 0, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
                 تعديل بيانات الوكيل
               </button>
+              </div>
               <span style={{ ...muted, alignSelf: 'center' }}>الحالة المسجلة: {selectedAgent.sourceStatus || 'غير محددة'}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8, marginTop: 12 }}>
@@ -511,6 +584,68 @@ export default function OrganizationDashboard() {
           {!reviews.length && <div style={panel}>لا توجد مراجعات ضمن السجلات المسترجعة.</div>}
         </section>}
 
+        {hierarchyEditor && <div role="dialog" aria-modal="true" aria-labelledby="office-hierarchy-title"
+          style={{ position: 'fixed', inset: 0, zIndex: 1001, background: 'rgba(0,0,0,0.76)', display: 'grid', placeItems: 'center', padding: 14 }}>
+          <section style={{ ...panel, width: 'min(100%, 520px)', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 70px rgba(0,0,0,0.5)' }}>
+            <h2 id="office-hierarchy-title" style={{ margin: '0 0 6px', fontSize: 19 }}>
+              {hierarchyEditor.kind === 'agent' ? 'تعديل تبعية الوكيل' : 'تعديل الإدارة الأعلى'}
+            </h2>
+            <p style={muted}>#{hierarchyEditor.id} · {hierarchyEditor.title}. سيُسجّل التغيير باسم المالك. لا يؤدي ذلك إلى تشغيل أي وكيل أو مهمة.</p>
+            {hierarchyEditor.kind === 'agent' ? <>
+              <label style={{ display: 'grid', gap: 5, ...muted, marginTop: 12 }}>
+                المدير المباشر
+                <select value={hierarchyEditor.managerId}
+                  onChange={e => { setHierarchyEditor({ ...hierarchyEditor, managerId: e.target.value }); setConfirmSave(false); }}
+                  style={field}>
+                  <option value="">بلا مدير مباشر</option>
+                  {agents.filter(agent => String(agent.id) !== hierarchyEditor.id).map(agent =>
+                    <option key={agent.id} value={String(agent.id)}>{agent.name} · #{agent.id}</option>
+                  )}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 5, ...muted, marginTop: 12 }}>
+                الإدارات التي ينتمي إليها الوكيل
+                <select multiple size={Math.min(7, Math.max(3, departments.length))}
+                  value={hierarchyEditor.departmentIds}
+                  onChange={e => {
+                    const departmentIds = Array.from(e.target.selectedOptions).map(option => option.value);
+                    setHierarchyEditor({ ...hierarchyEditor, departmentIds });
+                    setConfirmSave(false);
+                  }}
+                  style={{ ...field, minHeight: 110 }}>
+                  {departments.map(dept => <option key={dept.id} value={String(dept.id)}>{dept.name} · #{dept.id}</option>)}
+                </select>
+                <span>يمكن اختيار أكثر من إدارة. لإلغاء عضوية، أزل تحديدها. لا يمكن إزالة مدير الإدارة من إدارته الحالية.</span>
+              </label>
+            </> : <label style={{ display: 'grid', gap: 5, ...muted, marginTop: 12 }}>
+              الإدارة الأعلى
+              <select value={hierarchyEditor.parentId}
+                onChange={e => { setHierarchyEditor({ ...hierarchyEditor, parentId: e.target.value }); setConfirmSave(false); }}
+                style={field}>
+                <option value="">بلا إدارة أعلى</option>
+                {departments.filter(dept => String(dept.id) !== hierarchyEditor.id).map(dept =>
+                  <option key={dept.id} value={String(dept.id)}>{dept.name} · #{dept.id}</option>
+                )}
+              </select>
+            </label>}
+            <label style={{ display: 'flex', gap: 9, alignItems: 'flex-start', marginTop: 13, color: '#e6edf8', fontSize: 13, lineHeight: 1.6 }}>
+              <input type="checkbox" checked={confirmSave} onChange={e => setConfirmSave(e.target.checked)} />
+              أؤكد حفظ تغيير الهيكل الإداري في قاعدة البيانات وتسجيله في سجل التدقيق.
+            </label>
+            {saveError && <div role="alert" style={{ color: '#ffb9b9', marginTop: 10, fontSize: 13 }}>{saveError}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button disabled={!confirmSave || saving} onClick={saveHierarchy}
+                style={{ flex: 1, background: confirmSave ? '#285b43' : '#26313f', color: '#fff', border: 0, borderRadius: 8, padding: 10, opacity: saving ? 0.6 : 1 }}>
+                {saving ? 'جارٍ الحفظ…' : 'تأكيد تحديث الهيكل'}
+              </button>
+              <button disabled={saving} onClick={() => setHierarchyEditor(null)}
+                style={{ background: 'transparent', color: '#cbd5e1', border: '1px solid #52627b', borderRadius: 8, padding: '10px 14px' }}>
+                إلغاء
+              </button>
+            </div>
+          </section>
+        </div>}
+
         {editor && <div role="dialog" aria-modal="true" aria-labelledby="office-edit-title"
           style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.72)', display: 'grid', placeItems: 'center', padding: 14 }}>
           <section style={{ ...panel, width: 'min(100%, 480px)', boxShadow: '0 20px 70px rgba(0,0,0,0.5)' }}>
@@ -547,7 +682,7 @@ export default function OrganizationDashboard() {
         </div>}
 
         <footer style={{ ...muted, marginTop: 18, textAlign: 'center' }}>
-          آخر مزامنة: {date(data.timestamp || '')} · التعديل محصور في الأسماء والأوصاف بموافقة صريحة · لا يوجد تشغيل للوكلاء أو تنفيذ للمهام
+          آخر مزامنة: {date(data.timestamp || '')} · تعديل الملفات التعريفية والهيكل الإداري يتطلب تأكيد المالك ويُسجّل في التدقيق · لا يوجد تشغيل للوكلاء أو تنفيذ للمهام
         </footer>
       </>}
     </div>
