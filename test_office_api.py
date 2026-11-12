@@ -21,6 +21,8 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
                 manager_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO agents VALUES (1, 'CEO', 'chief', 'management', NULL, 'active', 'now');
+            INSERT INTO agents VALUES (2, 'Manager', 'manager', 'operations', 1, 'active', 'now');
+            INSERT INTO agents VALUES (3, 'Worker', 'worker', 'support', 2, 'active', 'now');
             CREATE TABLE departments (id INTEGER, name TEXT, description TEXT, parent_department_id INTEGER,
                 manager_agent_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO departments VALUES (1, 'Strategy', 'Planning', NULL, 1, 'active', 'now');
@@ -28,6 +30,9 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             CREATE TABLE agent_departments (id INTEGER, agent_id INTEGER, department_id INTEGER, role TEXT,
                 status TEXT, assigned_at TEXT);
             INSERT INTO agent_departments VALUES (1, 1, 1, 'manager', 'active', 'now');
+            INSERT INTO agent_departments VALUES (2, 2, 1, 'manager', 'active', 'now');
+            INSERT INTO reporting_lines VALUES (1, 1, 2, 1, 'reports_to', 'now');
+            INSERT INTO reporting_lines VALUES (2, 2, 3, 1, 'reports_to', 'now');
             CREATE TABLE tasks (id INTEGER, title TEXT, description TEXT, assigned_to INTEGER, status TEXT,
                 created_at TEXT, department_id INTEGER, parent_id INTEGER, result TEXT, score REAL,
                 priority TEXT, updated_at TEXT, dept_hint TEXT);
@@ -212,6 +217,65 @@ class OfficeApiSnapshotTests(unittest.TestCase):
     def test_limit_is_applied_to_limited_tables(self):
         result = office_api.snapshot(1)
         self.assertLessEqual(len(result["data"]["ceo_chat"]), 1)
+
+
+    def test_owner_confirmed_agent_hierarchy_update_syncs_memberships_and_reporting_lines(self):
+        result = office_api.update_profile({
+            "operation": "agent_hierarchy", "id": 3,
+            "manager_id": 1, "department_ids": [1, 2],
+        })
+        self.assertEqual(result["operation"], "agent_hierarchy")
+        with office_api.connect_readonly() as conn:
+            agent = conn.execute("SELECT manager_id FROM agents WHERE id=3").fetchone()
+            self.assertEqual(agent["manager_id"], 1)
+            memberships = conn.execute(
+                "SELECT department_id,status FROM agent_departments WHERE agent_id=3 ORDER BY department_id"
+            ).fetchall()
+            self.assertEqual([(r["department_id"], r["status"]) for r in memberships], [(1, "active"), (2, "active")])
+            lines = conn.execute(
+                "SELECT manager_agent_id,department_id FROM reporting_lines WHERE subordinate_agent_id=3 ORDER BY department_id"
+            ).fetchall()
+            self.assertEqual([(r["manager_agent_id"], r["department_id"]) for r in lines], [(1, 1), (1, 2)])
+            audit = conn.execute("SELECT action,details FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+            self.assertEqual(audit["action"], "agent_hierarchy_updated")
+            self.assertIn("agent=3", audit["details"])
+
+    def test_agent_hierarchy_rejects_self_and_cycles(self):
+        with self.assertRaisesRegex(ValueError, "agent_cannot_manage_itself"):
+            office_api.update_profile({"operation": "agent_hierarchy", "id": 2, "manager_id": 2})
+        with self.assertRaisesRegex(ValueError, "agent_reporting_cycle"):
+            office_api.update_profile({"operation": "agent_hierarchy", "id": 1, "manager_id": 3})
+        with office_api.connect_readonly() as conn:
+            self.assertIsNone(conn.execute("SELECT manager_id FROM agents WHERE id=1").fetchone()["manager_id"])
+
+    def test_agent_membership_rejects_removing_department_manager(self):
+        with office_api.connect_writable() as conn:
+            conn.execute("UPDATE departments SET manager_agent_id=2 WHERE id=1")
+            conn.commit()
+        with self.assertRaisesRegex(ValueError, "cannot_remove_department_manager"):
+            office_api.update_profile({"operation": "agent_hierarchy", "id": 2, "department_ids": []})
+
+    def test_agent_hierarchy_rejects_unknown_departments_and_unknown_fields(self):
+        with self.assertRaisesRegex(ValueError, "department_not_found_or_inactive"):
+            office_api.update_profile({"operation": "agent_hierarchy", "id": 3, "department_ids": [999]})
+        with self.assertRaisesRegex(ValueError, "unsupported_fields"):
+            office_api.update_profile({"operation": "agent_hierarchy", "id": 3, "role": "admin"})
+
+    def test_department_parent_update_rejects_self_and_cycles_and_is_audited(self):
+        result = office_api.update_profile({
+            "operation": "department_hierarchy", "id": 2, "parent_department_id": 1,
+        })
+        self.assertEqual(result["operation"], "department_hierarchy")
+        with office_api.connect_readonly() as conn:
+            self.assertEqual(conn.execute(
+                "SELECT parent_department_id FROM departments WHERE id=2"
+            ).fetchone()["parent_department_id"], 1)
+            audit = conn.execute("SELECT action FROM audit ORDER BY id DESC LIMIT 1").fetchone()
+            self.assertEqual(audit["action"], "department_hierarchy_updated")
+        with self.assertRaisesRegex(ValueError, "department_hierarchy_cycle"):
+            office_api.update_profile({"operation": "department_hierarchy", "id": 1, "parent_department_id": 2})
+        with self.assertRaisesRegex(ValueError, "department_cannot_parent_itself"):
+            office_api.update_profile({"operation": "department_hierarchy", "id": 1, "parent_department_id": 1})
 
 
 if __name__ == "__main__":
