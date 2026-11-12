@@ -235,7 +235,7 @@ export async function GET(request: Request) {
         summary: {
           departments: departments.length,
           agents: agents.length,
-          tasks: tasks.length,
+          tasks: Number(snapshot.counts?.tasks ?? tasks.length),
           runs: runs.length,
           pendingTasks: tasks.filter(task => ['pending', 'assigned', 'blocked'].includes(task.status)).length,
           submittedTasks: tasks.filter(task => task.status === 'submitted').length,
