@@ -121,7 +121,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("تعديل الإدارة", dashboard)
         self.assertIn("سجل التدقيق", dashboard)
         self.assertIn("activityLog.map", dashboard)
-        self.assertIn("لا يتيح تعديل السجل أو حذف أحداثه", dashboard)
+        self.assertIn("لا يتيح تعديل الأحداث أو حذفها", dashboard)
         self.assertIn("confirm: true", dashboard)
         self.assertIn("/api/office/manage", dashboard)
         self.assertNotIn("/api/office/agents", dashboard)
