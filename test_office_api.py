@@ -19,6 +19,17 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
                 manager_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO agents VALUES (1, 'CEO', 'chief', 'management', NULL, 'active', 'now');
+            CREATE TABLE departments (id INTEGER, name TEXT, description TEXT, parent_department_id INTEGER,
+                manager_agent_id INTEGER, status TEXT, created_at TEXT);
+            INSERT INTO departments VALUES (1, 'Strategy', 'Planning', NULL, 1, 'active', 'now');
+            CREATE TABLE agent_departments (id INTEGER, agent_id INTEGER, department_id INTEGER, role TEXT,
+                status TEXT, assigned_at TEXT);
+            INSERT INTO agent_departments VALUES (1, 1, 1, 'manager', 'active', 'now');
+            CREATE TABLE tasks (id INTEGER, title TEXT, description TEXT, assigned_to INTEGER, status TEXT,
+                created_at TEXT, department_id INTEGER, parent_id INTEGER, result TEXT, score REAL,
+                priority TEXT, updated_at TEXT, dept_hint TEXT);
+            INSERT INTO tasks VALUES (7, 'Test task', 'Task description', 1, 'assigned', 'now',
+                1, NULL, '', NULL, 'high', 'now', '');
             CREATE TABLE approvals (id INTEGER, ts TEXT, kind TEXT, payload TEXT,
                 status TEXT DEFAULT 'pending', decided_at TEXT, note TEXT);
             INSERT INTO approvals VALUES (1, '2026-11-12T00:00:00', 'create_agent',
@@ -61,6 +72,9 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["mode"], "read_only")
         self.assertEqual(len(result["data"]["agents"]), 1)
+        self.assertEqual(result["data"]["departments"][0]["name"], "Strategy")
+        self.assertEqual(result["data"]["agent_departments"][0]["role"], "manager")
+        self.assertEqual(result["data"]["tasks"][0]["title"], "Test task")
         self.assertEqual(result["data"]["runs"][0]["history"], [{"event": "finished"}])
         for table in ("ceo_chat", "ceo_feedback", "ceo_notes", "schedules", "usage", "watches"):
             self.assertEqual(len(result["data"][table]), 1, table)
