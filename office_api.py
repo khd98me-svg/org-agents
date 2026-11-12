@@ -239,17 +239,15 @@ class Handler(BaseHTTPRequestHandler):
         if urlparse(self.path).path != "/api/office/manage":
             self.send_json(404, {"ok": False, "error": "not_found"})
             return
-        owner_token = self.headers.get("X-Office-Owner-Token", "")
-        expected_owner = os.environ.get("OFFICE_OWNER_TOKEN", "")
-        if not expected_owner or len(expected_owner) < 32 or not hmac.compare_digest(owner_token, expected_owner):
-            self.send_json(403, {"ok": False, "error": "owner_confirmation_required"})
-            return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length < 2 or length > 8192:
                 self.send_json(413, {"ok": False, "error": "invalid_body_size"})
                 return
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(payload, dict) or payload.get("confirm") is not True:
+                self.send_json(403, {"ok": False, "error": "explicit_confirmation_required"})
+                return
             result = update_profile(payload)
             self.send_json(200, result)
         except LookupError:
