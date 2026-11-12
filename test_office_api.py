@@ -1,4 +1,5 @@
 """Focused regression tests for the read-only office API snapshot."""
+import ast
 import json
 import sqlite3
 import tempfile
@@ -80,6 +81,10 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             self.assertEqual(len(result["data"][table]), 1, table)
         self.assertEqual(result["data"]["approvals"][0]["status"], "pending")
         self.assertEqual(result["data"]["approvals"][0]["payload"]["name"], "Test Agent")
+
+    def test_installer_script_is_valid_python(self):
+        installer = Path(__file__).parent / "ui-bridge" / "apply_ui_patch.py"
+        ast.parse(installer.read_text(encoding="utf-8"), filename=str(installer))
 
     def test_database_connection_is_read_only(self):
         with office_api.connect_readonly() as conn:
