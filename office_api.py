@@ -569,7 +569,7 @@ def main():
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("Local office API: http://%s:%d/api/office" % (HOST, PORT))
     print("Database: %s" % DB_PATH)
-    print("Owner-confirmed agent/department profile edits and task creation/assignment are enabled; task execution and agent runs remain disabled.")
+    print("Owner-confirmed profile/hierarchy edits and task creation/assignment are enabled; task execution and agent runs remain disabled.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
