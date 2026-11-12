@@ -111,6 +111,16 @@ def main():
     else:
         raise SystemExit("Quest Log modal differs from reviewed version; stopped without changes.")
 
+    respond_old = """        const respondAction = async (response: string) => {
+          await secureFetch('/api/office/actions', {"""
+    respond_new = """        const respondAction = async (response: string) => {
+          if (action.data?.readOnly) return;
+          await secureFetch('/api/office/actions', {"""
+    if respond_old in patched_page:
+        patched_page = patched_page.replace(respond_old, respond_new, 1)
+    elif respond_new not in patched_page:
+        raise SystemExit("Quest response handler differs; stopped without changes.")
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup_dir = Path.home() / ".cache" / "office-ui-bridge-backups" / stamp
     backup_dir.mkdir(parents=True, exist_ok=False)
