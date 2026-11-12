@@ -598,7 +598,7 @@ export default function OrganizationDashboard() {
                   onChange={e => { setHierarchyEditor({ ...hierarchyEditor, managerId: e.target.value }); setConfirmSave(false); }}
                   style={field}>
                   <option value="">بلا مدير مباشر</option>
-                  {agents.filter(agent => String(agent.id) !== hierarchyEditor.id).map(agent =>
+                  {agents.filter(agent => String(agent.id) !== hierarchyEditor.id && agent.sourceStatus === 'active').map(agent =>
                     <option key={agent.id} value={String(agent.id)}>{agent.name} · #{agent.id}</option>
                   )}
                 </select>
