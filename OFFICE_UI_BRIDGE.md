@@ -30,7 +30,13 @@ cd ~/office-ui-bridge-checkout && git fetch https://github.com/khd98me-svg/org-a
 
 ## تشغيل الجسر
 
-في جلسة Termux الأولى، شغّل الجسر باستخدام الرمز المحفوظ في `~/openclawfice/.env.local`، مع قاعدة البيانات الفعلية `~/rl-agent/organization.db`. اترك الجلسة مفتوحة. لا تطبع الرمز أو ترسله.
+في جلسة Termux الأولى، أوقف نسخة الجسر القديمة بـ Ctrl+C ثم شغّل النسخة المحدّثة من مجلد checkout:
+
+```bash
+cd ~/office-ui-bridge-checkout && python run_office_api.py
+```
+
+يقرأ المشغّل رمز الجسر من `~/openclawfice/.env.local` وقاعدة البيانات من `~/rl-agent/organization.db` دون طباعة الرمز. اترك الجلسة مفتوحة.
 
 ## تشغيل الواجهة
 
