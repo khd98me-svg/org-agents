@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely install the read-only organization adapter and Quest Log approvals feed."""
+"""Safely install the organization bridge, task page, and read-only Quest Log feed."""
 from datetime import datetime, timezone
 from pathlib import Path
 import secrets
@@ -195,7 +195,7 @@ def main():
     task_temp.replace(TASK_PAGE)
 
     configure_env()
-    print("Installed the read-only organization adapter, Quest Log feed and organization dashboard.")
+    print("Installed the organization adapter, limited task-management page, Quest Log feed and organization dashboard.")
     print(f"Backup: {backup_dir}")
     print("Quest Log displays only approvals whose database status is pending.")
     print("Approval decisions and agent execution remain disabled.")
