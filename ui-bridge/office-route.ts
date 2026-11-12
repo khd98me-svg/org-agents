@@ -143,7 +143,11 @@ export async function GET(request: Request) {
         agentName: agentNames.get(String(line.subordinate_agent_id)) || ('Agent #' + line.subordinate_agent_id),
         relation: String(line.relation || 'manages'),
       }));
-      return { ...agent, departments: memberships, tasks: ownTasks.map(task => ({
+      const managerRecord = agent.manager_id == null ? null : {
+        id: String(agent.manager_id),
+        name: agentNames.get(String(agent.manager_id)) || ('Agent #' + agent.manager_id),
+      };
+      return { ...agent, managerRecord, departments: memberships, tasks: ownTasks.map(task => ({
         id: String(task.id), title: String(task.title || ('Task #' + task.id)), status: String(task.status || 'unknown'),
         priority: String(task.priority || 'normal'), updatedAt: task.updated_at || task.created_at || '',
       })), runs: ownRuns.map(run => ({
@@ -175,6 +179,10 @@ export async function GET(request: Request) {
           name: agentNames.get(String(dept.manager_agent_id)) || `Agent #${dept.manager_agent_id}`,
         },
         parentId: dept.parent_department_id == null ? null : String(dept.parent_department_id),
+        parent: dept.parent_department_id == null ? null : {
+          id: String(dept.parent_department_id),
+          name: departmentNames.get(String(dept.parent_department_id)) || ('Department #' + dept.parent_department_id),
+        },
         members,
         taskCount: rawTasks.filter(task => String(task.department_id || '') === String(dept.id)).length,
       };
