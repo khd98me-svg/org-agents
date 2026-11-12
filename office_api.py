@@ -145,6 +145,9 @@ def update_profile(payload):
     if operation not in limits:
         raise ValueError("unsupported_operation")
     fields = limits[operation]
+    allowed = {"operation", "id", "confirm"} | set(fields)
+    if set(payload) - allowed:
+        raise ValueError("unsupported_fields")
     values = {}
     for key, maximum in fields.items():
         if key in payload:
