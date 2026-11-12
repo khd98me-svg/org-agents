@@ -82,7 +82,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         result = office_api.snapshot(10)
         self.assertTrue(result["ok"])
         self.assertEqual(result["mode"], "read_only")
-        self.assertEqual(len(result["data"]["agents"]), 1)
+        self.assertEqual(len(result["data"]["agents"]), 3)
         self.assertEqual(result["data"]["departments"][0]["name"], "Strategy")
         self.assertEqual(result["data"]["agent_departments"][0]["role"], "manager")
         self.assertEqual(result["data"]["tasks"][0]["title"], "Test task")
@@ -111,7 +111,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.assertIn("relatedRuns", source)
         self.assertIn("relatedReviews", source)
         self.assertNotIn("/api/office/actions", source)
-        self.assertIn("التعديل محصور في الأسماء والأوصاف", source)
+        self.assertIn("تعديل الملفات التعريفية والهيكل الإداري", source)
 
     def test_agent_profiles_are_read_only_and_linked_to_org_records(self):
         root = Path(__file__).parent
