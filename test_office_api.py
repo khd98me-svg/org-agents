@@ -281,5 +281,19 @@ class OfficeApiSnapshotTests(unittest.TestCase):
             office_api.update_profile({"operation": "department_hierarchy", "id": 1, "parent_department_id": 1})
 
 
+    def test_dashboard_exposes_confirmed_hierarchy_editors_without_execution_controls(self):
+        dashboard = (Path(__file__).parent / "ui-bridge" / "organization-page.tsx").read_text(encoding="utf-8")
+        self.assertIn("تعديل المدير والإدارات", dashboard)
+        self.assertIn("تعديل الإدارة الأعلى", dashboard)
+        self.assertIn("operation: 'agent_hierarchy'", dashboard)
+        self.assertIn("operation: 'department_hierarchy'", dashboard)
+        self.assertIn("department_ids: hierarchyEditor.departmentIds.map(Number)", dashboard)
+        self.assertIn("parent_department_id:", dashboard)
+        self.assertIn("تأكيد تحديث الهيكل", dashboard)
+        self.assertIn("agent_reporting_cycle", dashboard)
+        self.assertNotIn("resume_orphans", dashboard)
+        self.assertNotIn("agent_run", dashboard)
+
+
 if __name__ == "__main__":
     unittest.main()
