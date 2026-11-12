@@ -266,10 +266,10 @@ export async function GET(request: Request) {
       chatLog,
       setupCheck: {
         status: 'ok',
-        message: 'Connected to the existing organization engine (read-only)',
+        message: 'Connected to the existing organization engine (limited profile management)',
       },
       organization: {
-        mode: 'read_only',
+        mode: 'limited_management',
         counts: snapshot.counts || {},
         summary: {
           departments: departments.length,
