@@ -47,6 +47,12 @@ export default function OrganizationDashboard() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveNotice, setSaveNotice] = useState('');
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState('all');
+  const [auditActorFilter, setAuditActorFilter] = useState('all');
+  const [auditFrom, setAuditFrom] = useState('');
+  const [auditTo, setAuditTo] = useState('');
+  const [auditSort, setAuditSort] = useState('newest');
 
   const load = useCallback(async () => {
     try {
@@ -121,6 +127,40 @@ export default function OrganizationDashboard() {
   const runs = data?.runs || [];
   const reviews = data?.reviews || [];
   const activityLog = data?.activityLog || [];
+  const auditActions = useMemo(() => Array.from(new Set(
+    activityLog.map(entry => String(entry.action || '')).filter(Boolean)
+  )).sort(), [activityLog]);
+  const auditActors = useMemo(() => Array.from(new Set(
+    activityLog.map(entry => String(entry.who || '')).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'ar')), [activityLog]);
+  const filteredAuditLog = useMemo(() => {
+    const q = auditQuery.trim().toLocaleLowerCase();
+    const from = auditFrom ? new Date(auditFrom + 'T00:00:00').getTime() : null;
+    const to = auditTo ? new Date(auditTo + 'T23:59:59.999').getTime() : null;
+    return activityLog.filter(entry => {
+      const matchesQuery = !q || [
+        entry.id, entry.action, entry.details, entry.text, entry.who, entry.actor,
+      ].some(value => String(value || '').toLocaleLowerCase().includes(q));
+      const matchesAction = auditActionFilter === 'all' || entry.action === auditActionFilter;
+      const matchesActor = auditActorFilter === 'all' || entry.who === auditActorFilter;
+      const timestamp = new Date(entry.t || '').getTime();
+      const matchesFrom = from === null || (Number.isFinite(timestamp) && timestamp >= from);
+      const matchesTo = to === null || (Number.isFinite(timestamp) && timestamp <= to);
+      return matchesQuery && matchesAction && matchesActor && matchesFrom && matchesTo;
+    }).sort((a, b) => {
+      const timeA = new Date(a.t || '').getTime() || 0;
+      const timeB = new Date(b.t || '').getTime() || 0;
+      return auditSort === 'oldest' ? timeA - timeB : timeB - timeA;
+    });
+  }, [activityLog, auditQuery, auditActionFilter, auditActorFilter, auditFrom, auditTo, auditSort]);
+  const resetAuditFilters = () => {
+    setAuditQuery('');
+    setAuditActionFilter('all');
+    setAuditActorFilter('all');
+    setAuditFrom('');
+    setAuditTo('');
+    setAuditSort('newest');
+  };
   const departments = data?.departments || [];
   const agents = data?.agents || [];
   const selectedAgent = agents.find(agent => String(agent.id) === selectedAgentId) || null;
@@ -361,15 +401,78 @@ export default function OrganizationDashboard() {
           </section>
         </>}
 
-        {tab === 'audit' && <section style={{ display: 'grid', gap: 9 }}>
-          <div style={{ ...muted, marginBottom: 4 }}>سجل تغييرات المؤسسة كما سجّلها المحرك. هذا القسم للعرض فقط ولا يتيح تعديل السجل أو حذف أحداثه.</div>
-          {activityLog.map((entry: Item, index: number) =>
-            <article key={String(entry.id || index)} style={panel}>
-              <strong>{entry.text || 'حدث مسجل'}</strong>
-              <div style={{ ...muted, marginTop: 6 }}>المنفذ: {entry.who || 'غير محدد'} · {date(entry.t)}</div>
-            </article>
-          )}
-          {!activityLog.length && <div style={panel}>لا توجد أحداث تدقيق ضمن السجلات المسترجعة.</div>}
+        {tab === 'audit' && <section style={{ display: 'grid', gap: 10 }}>
+          <div style={{ ...muted, marginBottom: 2 }}>سجل تغييرات المؤسسة كما سجّلها المحرك. يمكنك البحث والتصفية والترتيب؛ السجل للعرض فقط ولا يتيح تعديل الأحداث أو حذفها.</div>
+          <div style={{ ...panel, display: 'grid', gap: 10 }}>
+            <input aria-label="البحث في سجل التدقيق" value={auditQuery}
+              onChange={e => setAuditQuery(e.target.value)} placeholder="ابحث في الحدث أو التفاصيل أو المنفذ أو المعرّف…" style={field} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 8 }}>
+              <label style={{ display: 'grid', gap: 5, ...muted }}>نوع الحدث
+                <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)} style={field}>
+                  <option value="all">كل الأحداث</option>
+                  {auditActions.map(action => <option key={action} value={action}>{action}</option>)}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 5, ...muted }}>المنفذ
+                <select value={auditActorFilter} onChange={e => setAuditActorFilter(e.target.value)} style={field}>
+                  <option value="all">جميع المنفذين</option>
+                  {auditActors.map(actor => <option key={actor} value={actor}>{actor}</option>)}
+                </select>
+              </label>
+              <label style={{ display: 'grid', gap: 5, ...muted }}>من تاريخ
+                <input type="date" value={auditFrom} max={auditTo || undefined}
+                  onChange={e => setAuditFrom(e.target.value)} style={field} />
+              </label>
+              <label style={{ display: 'grid', gap: 5, ...muted }}>إلى تاريخ
+                <input type="date" value={auditTo} min={auditFrom || undefined}
+                  onChange={e => setAuditTo(e.target.value)} style={field} />
+              </label>
+              <label style={{ display: 'grid', gap: 5, ...muted }}>ترتيب الأحداث
+                <select value={auditSort} onChange={e => setAuditSort(e.target.value)} style={field}>
+                  <option value="newest">الأحدث أولاً</option>
+                  <option value="oldest">الأقدم أولاً</option>
+                </select>
+              </label>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={muted}>يعرض {filteredAuditLog.length} من أصل {activityLog.length} حدثاً</span>
+              <button type="button" onClick={resetAuditFilters}
+                style={{ background: 'transparent', color: '#cbd5e1', border: '1px solid #52627b', borderRadius: 8, padding: '8px 12px' }}>
+                مسح عوامل التصفية
+              </button>
+            </div>
+          </div>
+          {filteredAuditLog.map((entry: Item, index: number) => {
+            const actionNames: Record<string, string> = {
+              agent_profile_updated: 'تعديل بيانات وكيل',
+              department_profile_updated: 'تعديل بيانات إدارة',
+              task_created: 'إنشاء مهمة',
+              task_assigned: 'إسناد مهمة',
+              task_submitted: 'تسليم مهمة',
+              task_reviewed: 'مراجعة مهمة',
+              run_started: 'بدء تشغيل',
+              run_stopped: 'إيقاف تشغيل',
+              approval_requested: 'طلب موافقة',
+              approval_approved: 'الموافقة على إجراء',
+              approval_rejected: 'رفض إجراء',
+              agent_created: 'إنشاء وكيل',
+              goal_planned: 'تخطيط هدف',
+            };
+            const action = String(entry.action || '');
+            return <article key={String(entry.id || action + '-' + index)} style={panel}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                <strong>{actionNames[action] || action.replaceAll('_', ' ') || 'حدث مسجل'}</strong>
+                <span style={{ ...muted, direction: 'ltr' }}>{action}</span>
+              </div>
+              {entry.details && <div style={{ marginTop: 9, padding: 10, background: '#101722', borderRadius: 8, fontSize: 13, lineHeight: 1.7, overflowWrap: 'anywhere' }}>
+                <span style={muted}>التفاصيل: </span>{entry.details}
+              </div>}
+              <div style={{ ...muted, marginTop: 9 }}>المنفذ: {entry.who || 'غير محدد'} · {date(entry.t)}{entry.id ? ' · سجل #' + entry.id : ''}</div>
+            </article>;
+          })}
+          {!filteredAuditLog.length && <div style={panel}>
+            {activityLog.length ? 'لا توجد أحداث تطابق عوامل البحث والتصفية الحالية.' : 'لا توجد أحداث تدقيق ضمن السجلات المسترجعة.'}
+          </div>}
         </section>}
 
         {tab === 'reviews' && <section style={{ display: 'grid', gap: 9 }}>
