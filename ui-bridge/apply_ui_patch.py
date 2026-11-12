@@ -101,6 +101,13 @@ def main():
     else:
         raise SystemExit("OpenClawfice agent normalization block differs; stopped without changes.")
 
+    # Replace OpenClawfice's stale empty-state source label. The Quest Log
+    # endpoint is now backed by organization.db:approvals, not actions.json.
+    legacy_source = "(Pulled from ~/.openclaw/.status/actions.json)"
+    current_source = "(Source: organization.db — pending approvals)"
+    if legacy_source in patched_page:
+        patched_page = patched_page.replace(legacy_source, current_source, 1)
+
     if READ_ONLY_START in patched_page:
         patched_page = patched_page.replace(READ_ONLY_START, READ_ONLY_WRAPPED_START, 1)
         if READ_ONLY_END not in patched_page:
