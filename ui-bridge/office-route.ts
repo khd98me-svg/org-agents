@@ -128,7 +128,7 @@ export async function GET(request: Request) {
         const reviewer = String(review.reviewer ?? '').trim();
         // Review records may store a numeric agent ID, the agent name,
         // or the engine's stable "agent<N>" reviewer key.
-        const agentKey = /^agent(\\d+)$/i.exec(reviewer);
+        const agentKey = /^agent(\d+)$/i.exec(reviewer);
         return reviewer === id ||
           reviewer === String(agent.name || '').trim() ||
           (agentKey !== null && agentKey[1] === id);
