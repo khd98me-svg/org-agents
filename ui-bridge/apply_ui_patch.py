@@ -176,6 +176,7 @@ def main():
         (LEGACY_AUTOWORK, LEGACY_AUTOWORK_SOURCE, "legacy-autowork-route.ts"),
         (LEGACY_CHAT, LEGACY_CHAT_SOURCE, "legacy-chat-route.ts"),
     ):
+        target.parent.mkdir(parents=True, exist_ok=True)
         temp = target.with_name(target.name + ".office-ui-bridge.tmp")
         shutil.copy2(source, temp)
         temp.replace(target)
