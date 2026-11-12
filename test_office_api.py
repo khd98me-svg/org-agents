@@ -17,7 +17,7 @@ class OfficeApiSnapshotTests(unittest.TestCase):
         self.db_path = Path(handle.name)
         conn = sqlite3.connect(self.db_path)
         conn.executescript("""
-            CREATE TABLE audit (id INTEGER PRIMARY KEY, actor TEXT, action TEXT, details TEXT, created_at TEXT);\n            CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
+            CREATE TABLE audit (id INTEGER PRIMARY KEY, actor TEXT, action TEXT, details TEXT, created_at TEXT);
             CREATE TABLE agents (id INTEGER, name TEXT, role TEXT, specialty TEXT,
                 manager_id INTEGER, status TEXT, created_at TEXT);
             INSERT INTO agents VALUES (1, 'CEO', 'chief', 'management', NULL, 'active', 'now');
