@@ -62,8 +62,6 @@ jobs:
           set -euo pipefail
           rm -rf /tmp/office-publish
           mkdir -p /tmp/office-publish
-          cp /tmp/office-export/snapshot.enc /tmp/office-publish/snapshot.enc
-          cp /tmp/office-export/snapshot.hmac /tmp/office-publish/snapshot.hmac
           cd /tmp/office-publish
           git init -q
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
@@ -73,6 +71,8 @@ jobs:
           else
             git checkout -q --orphan office-sync
           fi
+          cp /tmp/office-export/snapshot.enc snapshot.enc
+          cp /tmp/office-export/snapshot.hmac snapshot.hmac
           git config user.name "org-office-sync"
           git config user.email "org-office-sync@users.noreply.github.com"
           git add snapshot.enc snapshot.hmac
